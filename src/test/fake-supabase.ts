@@ -60,6 +60,9 @@ export interface FakeDb {
   categories: Row[]
   dashboard: Row | null
   uploads: string[]
+  movements: Row[]
+  /** Paksa RPC tertentu gagal (simulasi error server / jaringan). */
+  failRpc: Record<string, { message: string; code?: string }>
 }
 
 export function seedDb(): FakeDb {
@@ -97,6 +100,12 @@ export function seedDb(): FakeDb {
     ],
     dashboard: null,
     uploads: [],
+    movements: [
+      { id: 'm-1', created_at: '2026-11-20T02:00:00Z', movement_type: 'initial', quantity: 307, stock_before: 0, stock_after: 307, reason: 'Stok awal', product_id: 'p-1', product_name: 'VALENTINE / SCANDALOUS', sku: 'TKL-0001', unit: 'ML', user_name: 'Nawir', transaction_id: null, transaction_number: null },
+      { id: 'm-2', created_at: '2026-11-21T15:11:00Z', movement_type: 'sale', quantity: -10, stock_before: 317, stock_after: 307, reason: 'Penjualan', product_id: 'p-1', product_name: 'VALENTINE / SCANDALOUS', sku: 'TKL-0001', unit: 'ML', user_name: 'Kasir Satu', transaction_id: 't-1', transaction_number: 'MP-TKL-20261121-0001' },
+      { id: 'm-3', created_at: '2026-11-21T03:00:00Z', movement_type: 'stock_out', quantity: -1.5, stock_before: 50, stock_after: 48.5, reason: 'Botol pecah / tumpah', product_id: 'p-3', product_name: 'SELENA GOMES', sku: 'TKL-0003', unit: 'ML', user_name: 'Admin TKL', transaction_id: null, transaction_number: null },
+    ],
+    failRpc: {},
   }
 }
 
@@ -247,7 +256,50 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
     },
     rpc: async (fn: string, args: Record<string, unknown> = {}) => {
       calls.rpc.push({ fn, args })
+      if (db.failRpc[fn]) return { data: null, error: db.failRpc[fn] }
       switch (fn) {
+        case 'get_stock_summary': {
+          const act = db.products.filter((p) => p.outlet_id === args.p_outlet_id && p.is_active)
+          const st = (p: Row) => Number(p.current_stock)
+          return {
+            data: {
+              active_count: act.length,
+              low_count: act.filter((p) => st(p) > 0 && st(p) <= Number(p.min_stock)).length,
+              empty_count: act.filter((p) => st(p) <= 0).length,
+              value_at_sell_price: act.reduce((n, p) => n + Math.max(st(p), 0) * Number(p.sell_price), 0),
+              value_at_cost: perms(args.p_outlet_id).includes('cost.view')
+                ? act.reduce((n, p) => n + Math.max(st(p), 0) * Number(p.cost_price), 0)
+                : null,
+            },
+            error: null,
+          }
+        }
+        case 'get_stock_movements': {
+          const list = db.movements
+            .filter((m) => !args.p_product_id || m.product_id === args.p_product_id)
+            .filter((m) => !args.p_types || (args.p_types as string[]).includes(m.movement_type as string))
+            .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+          const off = Number(args.p_offset)
+          return { data: { total: list.length, summary: [], items: list.slice(off, off + Number(args.p_limit)) }, error: null }
+        }
+        case 'adjust_stock': {
+          const existing = db.movements.find((m) => m.idempotency_key === args.p_idempotency_key)
+          if (existing) return { data: { ...existing, replayed: true }, error: null }
+          const p = db.products.find((x) => x.id === args.p_product_id)!
+          const before = Number(p.current_stock)
+          const q = Number(args.p_quantity)
+          const delta = args.p_type === 'adjustment' ? q - before : args.p_type === 'stock_in' ? q : -q
+          if (before + delta < 0) return { data: null, error: { code: 'P0001', message: `Stok ${p.name} tidak cukup (tersedia ${before}, dibutuhkan ${q})` } }
+          p.current_stock = before + delta
+          const mv = {
+            id: `m-${db.movements.length + 1}`, created_at: '2026-11-21T16:00:00Z', movement_type: args.p_type, quantity: delta,
+            stock_before: before, stock_after: before + delta, reason: args.p_reason || null, product_id: p.id, product_name: p.name,
+            sku: p.sku, unit: p.unit, user_name: current?.full_name ?? null, transaction_id: null, transaction_number: null,
+            idempotency_key: args.p_idempotency_key,
+          }
+          db.movements.push(mv)
+          return { data: { ...mv, replayed: false }, error: null }
+        }
         case 'my_access':
           return { data: current?.access ?? [], error: null }
         case 'get_dashboard':

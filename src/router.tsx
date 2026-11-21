@@ -7,10 +7,10 @@ import { MorePage } from '@/pages/more-page'
 import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { ProductsPage } from '@/features/products/products-page'
+import { StockPage } from '@/features/stock/stock-page'
 import { NAV_ITEMS } from '@/lib/navigation'
 
 const PHASE: Record<string, string> = {
-  '/stok': 'Fase 4',
   '/kasir': 'Fase 5',
   '/transaksi': 'Fase 5',
   '/laporan': 'Fase 6',
@@ -30,6 +30,14 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'lainnya', element: <MorePage /> },
+          {
+            path: 'stok',
+            element: (
+              <RequirePermission anyOf={NAV_ITEMS.find((i) => i.to === '/stok')!.permissions}>
+                <StockPage />
+              </RequirePermission>
+            ),
+          },
           {
             path: 'produk',
             element: (

@@ -88,7 +88,7 @@ describe('Peran pengguna di UI', () => {
 
   it('admin: dapat membuka stok, tidak dapat membuka karyawan', async () => {
     const a = renderRoute('/stok', USERS.admin)
-    expect(await a.findByText('Modul Stok sedang dibangun')).toBeInTheDocument()
+    expect(await a.findByRole('tab', { name: /Daftar Stok/ })).toBeInTheDocument()
     a.unmount()
     renderRoute('/karyawan', USERS.admin)
     expect(await screen.findByText('Akses ditolak')).toBeInTheDocument()

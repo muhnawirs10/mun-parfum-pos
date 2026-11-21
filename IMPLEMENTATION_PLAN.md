@@ -79,8 +79,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 1 | Audit repository, fondasi proyek, tema, layout, routing, utilitas desimal/format, unit test, dokumentasi | ✅ Selesai |
 | 2 | Migration database, Supabase Auth, RLS, peran & izin, RPC atomik, tes database | ✅ Selesai |
 | 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ✅ Selesai |
-| 4 | Stok masuk/keluar/opname & riwayat pergerakan | ⏳ Berikutnya |
-| 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | – |
+| 4 | Stok masuk/keluar/opname & riwayat pergerakan | ✅ Selesai |
+| 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ⏳ Berikutnya |
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | – |
 | 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | – |
 | 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet | – |
@@ -181,6 +181,36 @@ berdasarkan izin `products.manage`.
 - Belum: uji terhadap PostgREST/Supabase sungguhan. Pemasangan PostgREST
   lokal ditolak oleh pengaman otomatis lingkungan pengembangan.
 
+## Catatan Fase 4
+
+**Database** (`0500_stock`): `get_stock_movements` (riwayat dengan nama
+produk, pengguna, nomor transaksi; filter produk/jenis/tanggal WITA; paging;
+ringkasan per jenis) dan `get_stock_summary` (produk aktif, menipis, habis,
+nilai persediaan; nilai HPP hanya untuk `cost.view`, stok minus tidak
+menambah nilai). Perubahan stok tetap hanya lewat `adjust_stock`,
+`create_sale`, `void_transaction`.
+
+**Frontend** (`/stok`): kartu ringkasan; tab Daftar Stok (cari, filter
+menipis/habis, tombol Masuk/Keluar/Opname/Riwayat per produk) dan Riwayat
+Pergerakan (filter produk, jenis, tanggal; jumlah bertanda; stok sebelum →
+sesudah; pengguna; nomor transaksi; jam WITA; "muat lebih banyak"). Dialog
+penyesuaian: pilihan Masuk/Keluar/Opname, pratinjau stok sesudah (dengan
+peringatan bila minus), alasan cepat, alasan wajib untuk keluar/opname,
+validasi satuan bulat, blokir saat offline. **Satu idempotency key per
+pengisian dialog**: klik ganda atau kirim ulang setelah gangguan jaringan
+tidak menggandakan stok. Tombol riwayat di halaman Produk membuka riwayat
+produk tersebut.
+
+**Hasil uji Fase 4**
+
+- Tes database: **65 lulus** (6 baru, termasuk konsistensi rantai
+  stok_sebelum/stok_sesudah di seluruh jenis pergerakan).
+- Unit/komponen: **88 lulus** (14 baru, termasuk kirim ulang dengan kunci
+  yang sama setelah error jaringan).
+- Browser (tablet & ponsel, respons Supabase disimulasikan): 0 error console,
+  tanpa overflow. Perbaikan dari pemeriksaan visual: pencarian & filter
+  ditumpuk di ponsel, label tanggal terlihat, gaya fokus tab.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
@@ -190,8 +220,8 @@ berdasarkan izin `products.manage`.
 | 3 | Tambah produk | ✅ DB + UI | `tests/db/products-stock.test.ts`, `products-page.test.tsx` |
 | 4 | Edit produk | ✅ DB + UI | 〃 |
 | 5 | Hapus/nonaktifkan produk | ✅ DB + UI | 〃 |
-| 6 | Stok masuk | ✅ DB | 〃 |
-| 7 | Stok keluar | ✅ DB | 〃 |
+| 6 | Stok masuk | ✅ DB + UI | `products-stock.test.ts`, `stock.test.ts`, `stock-page.test.tsx` |
+| 7 | Stok keluar | ✅ DB + UI | 〃 |
 | 8 | Penjualan 5 ml | ✅ DB + unit | `tests/db/sales.test.ts`, `sale-calc.test.ts` |
 | 9 | Penjualan 10 ml | ✅ DB + unit | 〃 |
 | 10 | Penjualan dengan diskon | ✅ DB + unit | 〃 |
