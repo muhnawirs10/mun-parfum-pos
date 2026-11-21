@@ -15,5 +15,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // tes UI berbasis jsdom bisa lambat saat mesin sibuk; batas default 5 detik terlalu ketat
+    testTimeout: 15_000,
   },
 })

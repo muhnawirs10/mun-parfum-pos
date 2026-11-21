@@ -42,7 +42,7 @@ describe('Peran pengguna & izin', () => {
 
   it('izin tambahan dan pencabutan izin per pengguna bekerja', async () => {
     await asUser(w.owner, `update public.outlet_users set permissions = '{profit.view}' where user_id = $1`, [w.adminTkl])
-    const [{ r }] = await asUser(w.adminTkl, `select public.get_sales_report(current_date, current_date, $1) r`, [w.tkl])
+    const [{ r }] = await asUser(w.adminTkl, `select public.get_sales_report((now() at time zone 'Asia/Makassar')::date, (now() at time zone 'Asia/Makassar')::date, $1) r`, [w.tkl])
     expect(r.can_view_profit).toBe(true)
     await asUser(w.owner, `update public.outlet_users set revoked_permissions = '{stock.manage}' where user_id = $1`, [w.adminTkl])
     expect(await errorOf(asUser(w.adminTkl, `select public.adjust_stock($1, 'stock_in', 1, 'x', $2)`, [valentine, uuid()]))).toMatch(
@@ -114,7 +114,7 @@ describe('Pembatasan akses outlet (RLS)', () => {
     const mksProduct = await createValentine(w, w.mks, '50')
     await sell(w.kasirTkl, w.tkl, [{ product_id: valentine, quantity: '10' }], { method: 'qris' })
     await sell(w.kasirMks, w.mks, [{ product_id: mksProduct, quantity: '5' }], { method: 'qris' })
-    const [{ r }] = await asUser(w.owner, `select public.get_sales_report(current_date, current_date) r`)
+    const [{ r }] = await asUser(w.owner, `select public.get_sales_report((now() at time zone 'Asia/Makassar')::date, (now() at time zone 'Asia/Makassar')::date) r`)
     const byOutlet = Object.fromEntries(r.by_outlet.map((o: any) => [o.outlet_id, o]))
     expect(byOutlet[w.tkl].omzet).toBe(20000)
     expect(byOutlet[w.tkl].gross_profit).toBe(9860)

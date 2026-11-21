@@ -53,3 +53,37 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ── Cetak struk (printer thermal 58 mm) ─────────────────────────────── */
+/* Struk cetak dirender terpisah di <body> (lihat PrintableReceipt) agar tidak
+   terpengaruh posisi/transform dialog dan tidak terpotong area gulir. */
+@media screen {
+  .print-root {
+    display: none;
+  }
+}
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 2mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+  .print-root {
+    display: block;
+    width: 54mm;
+  }
+  .print-root .receipt-print {
+    width: 54mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 10px !important;
+    color: #000 !important;
+  }
+}

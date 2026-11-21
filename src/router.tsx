@@ -8,11 +8,11 @@ import { NotFoundPage } from '@/pages/not-found-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { ProductsPage } from '@/features/products/products-page'
 import { StockPage } from '@/features/stock/stock-page'
+import { PosPage } from '@/features/pos/pos-page'
+import { TransactionsPage } from '@/features/transactions/transactions-page'
 import { NAV_ITEMS } from '@/lib/navigation'
 
 const PHASE: Record<string, string> = {
-  '/kasir': 'Fase 5',
-  '/transaksi': 'Fase 5',
   '/laporan': 'Fase 6',
   '/pengeluaran': 'Fase 6',
   '/karyawan': 'Fase 7',
@@ -30,6 +30,15 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'lainnya', element: <MorePage /> },
+          {
+            path: 'kasir',
+            element: (
+              <RequirePermission anyOf={NAV_ITEMS.find((i) => i.to === '/kasir')!.permissions}>
+                <PosPage />
+              </RequirePermission>
+            ),
+          },
+          { path: 'transaksi', element: <TransactionsPage /> },
           {
             path: 'stok',
             element: (

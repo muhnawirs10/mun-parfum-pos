@@ -80,8 +80,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 2 | Migration database, Supabase Auth, RLS, peran & izin, RPC atomik, tes database | ✅ Selesai |
 | 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ✅ Selesai |
 | 4 | Stok masuk/keluar/opname & riwayat pergerakan | ✅ Selesai |
-| 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ⏳ Berikutnya |
-| 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | – |
+| 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ✅ Selesai |
+| 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ⏳ Berikutnya |
 | 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | – |
 | 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet | – |
 | 9 | E2E test, security audit, deployment | – |
@@ -211,6 +211,56 @@ produk tersebut.
   tanpa overflow. Perbaikan dari pemeriksaan visual: pencarian & filter
   ditumpuk di ponsel, label tanggal terlihat, gaya fokus tab.
 
+## Catatan Fase 5
+
+**Database** (`0600_transactions`): `get_transactions` (riwayat dengan filter
+tanggal WITA, status, metode, pencarian nomor/produk/pelanggan; kasir hanya
+miliknya; omzet hanya transaksi selesai) dan `get_transaction_detail` (data
+struk: item, pembayaran, outlet, kasir, footer dari pengaturan
+`receipt_footer`; laba hanya untuk `profit.view`; transaksi orang lain dijawab
+"tidak ditemukan"). Penyimpanan tetap oleh `create_sale` (0300).
+
+**Kasir** (`/kasir`): katalog (cari, kategori, A–Z/Z–A, penanda jumlah di
+keranjang, stok habis), dialog jumlah dengan tombol cepat (1–50 ml) dan input
+desimal, diskon item, keranjang (+/−, ubah, hapus, kosongkan), diskon
+transaksi, nama pelanggan, pembayaran Tunai/QRIS/Transfer/E-wallet/Lainnya,
+uang diterima + nominal cepat + kembalian, nomor referensi non-tunai. Tablet:
+keranjang di samping; ponsel: bar keranjang + dialog.
+
+Keamanan transaksi di UI:
+
+- Keranjang dikosongkan dan struk ditampilkan **hanya setelah server
+  mengonfirmasi**; struk diambil dari database, bukan dari keranjang.
+- Kunci idempotensi per isi keranjang: bila respons hilang (koneksi putus
+  setelah server menyimpan), "Coba lagi" mengembalikan transaksi yang sama.
+  Pesan menegaskan transaksi BELUM dipastikan tersimpan.
+- Offline: tombol bayar nonaktif; tidak ada antrean transaksi lokal.
+- Validasi stok di dialog (kecuali stok minus diizinkan); keputusan akhir
+  tetap di database.
+
+**Struk**: lebar 58 mm, cetak lewat dialog cetak browser. Salinan cetak
+dirender langsung di `<body>` agar tidak terpotong/tergeser dialog.
+Cetak ulang dari Riwayat Transaksi diberi tanda "CETAK ULANG".
+
+**Riwayat Transaksi** (`/transaksi`): filter tanggal (default hari ini WITA),
+status, metode, pencarian; ringkasan jumlah & omzet; detail + struk; cetak
+ulang; pembatalan dengan alasan wajib (stok dikembalikan, transaksi tetap
+tersimpan).
+
+**Hasil uji Fase 5**
+
+- Tes database: **69 lulus** (4 baru).
+- Unit/komponen: **107 lulus** (19 baru): penjualan 10 ml tunai (kembalian
+  Rp30.000, stok 297 ml, HPP Rp10.140, laba Rp9.860), 5 ml QRIS, diskon,
+  uang kurang, desimal, stok tidak cukup dari server, respons hilang + coba
+  lagi (1 transaksi), offline, riwayat, cetak ulang, pembatalan.
+- Browser (tablet & ponsel, respons Supabase disimulasikan): alur kasir →
+  bayar → struk → riwayat; 0 error console; tanpa overflow. Perbaikan dari
+  pemeriksaan visual: posisi struk saat dicetak, ruang bawah katalog ponsel.
+- Catatan printer: cetak memakai dialog cetak sistem. Printer thermal
+  Bluetooth di Android memerlukan aplikasi layanan cetak (mis. RawBT);
+  cetak ESC/POS langsung belum termasuk.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
@@ -222,18 +272,18 @@ produk tersebut.
 | 5 | Hapus/nonaktifkan produk | ✅ DB + UI | 〃 |
 | 6 | Stok masuk | ✅ DB + UI | `products-stock.test.ts`, `stock.test.ts`, `stock-page.test.tsx` |
 | 7 | Stok keluar | ✅ DB + UI | 〃 |
-| 8 | Penjualan 5 ml | ✅ DB + unit | `tests/db/sales.test.ts`, `sale-calc.test.ts` |
-| 9 | Penjualan 10 ml | ✅ DB + unit | 〃 |
-| 10 | Penjualan dengan diskon | ✅ DB + unit | 〃 |
-| 11 | Pembayaran tunai | ✅ DB | `tests/db/sales.test.ts` |
-| 12 | Pembayaran QRIS | ✅ DB | 〃 |
-| 13 | Perhitungan kembalian | ✅ DB + unit | 〃 |
+| 8 | Penjualan 5 ml | ✅ DB + unit + UI | `tests/db/sales.test.ts`, `sale-calc.test.ts` |
+| 9 | Penjualan 10 ml | ✅ DB + unit + UI | 〃 + `pos-page.test.tsx` |
+| 10 | Penjualan dengan diskon | ✅ DB + unit + UI | 〃 |
+| 11 | Pembayaran tunai | ✅ DB + UI | `tests/db/sales.test.ts` |
+| 12 | Pembayaran QRIS | ✅ DB + UI | 〃 |
+| 13 | Perhitungan kembalian | ✅ DB + unit + UI | 〃 |
 | 14 | Perhitungan HPP | ✅ DB + unit | 〃 |
 | 15 | Perhitungan laba | ✅ DB + unit | `tests/db/reports.test.ts` |
 | 16 | Closing harian | ✅ DB (sesi kas); cetak PDF di Fase 6 | `tests/db/reports.test.ts` |
 | 17 | Export PDF | ⏳ Fase 6 | – |
 | 18 | Export Excel | ⏳ Fase 6 | – |
 | 19 | Pembatasan akses outlet | ✅ DB + UI | `tests/db/security.test.ts` |
-| 20 | Pencegahan transaksi ganda | ✅ DB, termasuk 10 permintaan paralel | `tests/db/sales.test.ts` |
-| 21 | Internet terputus | ✅ indikator UI; perilaku checkout di Fase 5 | `app-shell.test.tsx` |
+| 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI (coba lagi setelah respons hilang) | `tests/db/sales.test.ts` |
+| 21 | Internet terputus | ✅ indikator, tombol bayar nonaktif, tidak ada klaim sukses | `app-shell.test.tsx`, `pos-page.test.tsx` |
 | 22 | Instalasi PWA | ⏳ Fase 8 | – |

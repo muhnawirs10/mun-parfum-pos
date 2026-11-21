@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { OutletAccess } from '@/features/auth/permissions'
 import { PERMISSIONS } from '@/features/auth/permissions'
+import { calcSale } from '@/lib/sale-calc'
 
 export interface FakeUser {
   id: string
@@ -63,6 +64,10 @@ export interface FakeDb {
   movements: Row[]
   /** Paksa RPC tertentu gagal (simulasi error server / jaringan). */
   failRpc: Record<string, { message: string; code?: string }>
+  /** RPC dijalankan di server, tetapi responsnya "hilang" (jaringan putus). */
+  dropResponseOnce: Record<string, boolean>
+  transactions: Row[]
+  settings: Row[]
 }
 
 export function seedDb(): FakeDb {
@@ -106,6 +111,9 @@ export function seedDb(): FakeDb {
       { id: 'm-3', created_at: '2026-11-21T03:00:00Z', movement_type: 'stock_out', quantity: -1.5, stock_before: 50, stock_after: 48.5, reason: 'Botol pecah / tumpah', product_id: 'p-3', product_name: 'SELENA GOMES', sku: 'TKL-0003', unit: 'ML', user_name: 'Admin TKL', transaction_id: null, transaction_number: null },
     ],
     failRpc: {},
+    dropResponseOnce: {},
+    transactions: [],
+    settings: [],
   }
 }
 
@@ -193,71 +201,113 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
   const perms = (outlet: unknown) => current?.access.find((a) => a.outlet_id === outlet)?.permissions ?? []
   let skuCounter = 100
 
-  const client = {
-    auth: {
-      getSession: async () => ({ data: { session: sessionOf(current) }, error: null }),
-      onAuthStateChange: (cb: (event: string, session: unknown) => void) => {
-        listeners.add(cb)
-        return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }
-      },
-      signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
-        calls.signIn.push(email)
-        const u = Object.values(USERS).find((x) => x.email === email && x.password === password)
-        if (!u) return { data: { session: null }, error: { message: 'Invalid login credentials' } }
-        current = u
-        return { data: { session: sessionOf(u) }, error: null }
-      },
-      signOut: async () => {
-        calls.signOut++
-        current = null
-        return { error: null }
-      },
-    },
-    from: (table: string) => {
-      const noop = (r: Row) => r
-      switch (table) {
-        case 'profiles':
-          return new Query(
-            () =>
-              current
-                ? [{ id: current.id, full_name: current.full_name, username: current.username ?? null, is_owner: !!current.is_owner, is_active: true }]
-                : [],
-            null, noop, table, calls.writes,
-          )
-        case 'products':
-          // seperti column privilege: cost_price tidak pernah dikembalikan dari tabel
-          return new Query(
-            () => db.products.filter((p) => perms(p.outlet_id).length > 0).map((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'cost_price'))),
-            null, noop, table, calls.writes,
-          )
-        case 'product_costs':
-          return new Query(
-            () =>
-              db.products
-                .filter((p) => perms(p.outlet_id).includes('cost.view'))
-                .map((p) => ({ product_id: p.id, outlet_id: p.outlet_id, cost_price: p.cost_price })),
-            null, noop, table, calls.writes,
-          )
-        case 'categories':
-          return new Query(
-            () => db.categories.filter((c) => perms(c.outlet_id).length > 0),
-            null,
-            (r) => {
-              const row = { id: `c-${db.categories.length + 1}`, sort_order: 0, is_active: true, ...r }
-              db.categories.push(row)
-              return row
-            },
-            table,
-            calls.writes,
-          )
-        default:
-          throw new Error('tabel tidak didukung: ' + table)
-      }
-    },
-    rpc: async (fn: string, args: Record<string, unknown> = {}) => {
-      calls.rpc.push({ fn, args })
-      if (db.failRpc[fn]) return { data: null, error: db.failRpc[fn] }
+  const saleResult = (t: Row) => ({
+    id: t.id,
+    number: t.number,
+    business_date: t.business_date,
+    status: t.status,
+    total: t.total,
+    subtotal: t.subtotal,
+    item_count: t.item_count,
+    payment_method: t.payment_method,
+    amount_paid: t.amount_paid,
+    change_amount: t.change_amount,
+    created_at: t.created_at,
+  })
+
+  async function runRpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
       switch (fn) {
+        case 'create_sale': {
+          const existing = db.transactions.find((t) => t.idempotency_key === args.p_idempotency_key)
+          if (existing) return { data: { ...saleResult(existing), replayed: true }, error: null }
+          if (!perms(args.p_outlet_id).includes('pos.sell')) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin pos.sell diperlukan' } }
+          const items = args.p_items as { product_id: string; quantity: string; discount_amount: string }[]
+          const prods = items.map((i) => db.products.find((p) => p.id === i.product_id)!)
+          const need = new Map<string, number>()
+          items.forEach((i) => need.set(i.product_id, (need.get(i.product_id) ?? 0) + Number(i.quantity)))
+          for (const p of prods) {
+            if (Number(p.current_stock) < need.get(p.id as string)!) {
+              return { data: null, error: { code: 'P0001', hint: 'INSUFFICIENT_STOCK', message: `Stok ${p.name} tidak cukup (tersedia ${p.current_stock}, dibutuhkan ${need.get(p.id as string)})` } }
+            }
+          }
+          const r = calcSale(
+            items.map((i, k) => ({ price: String(prods[k].sell_price), cost: String(prods[k].cost_price), qty: i.quantity, discount: i.discount_amount })),
+            String(args.p_discount_amount ?? '0'),
+          )
+          const total = r.total.toNumber()
+          const cash = args.p_payment_method === 'cash'
+          const received = cash ? Number(args.p_amount_received) : total
+          if (cash && received < total) return { data: null, error: { code: '22023', message: 'Uang diterima kurang dari total belanja' } }
+          prods.forEach((p, k) => (p.current_stock = Number(p.current_stock) - Number(items[k].quantity)))
+          const n = db.transactions.length + 1
+          const t: Row = {
+            id: `t-${n}`, number: `MP-TKL-20261121-${String(n).padStart(4, '0')}`, business_date: '2026-11-21', created_at: '2026-11-21T15:30:00Z',
+            status: 'completed', customer_name: args.p_customer_name ?? null, note: args.p_note ?? null,
+            subtotal: r.subtotal.toNumber(), item_discount_total: r.itemDiscountTotal.toNumber(), discount_amount: r.transactionDiscount.toNumber(),
+            total, item_count: items.length, payment_method: args.p_payment_method, amount_paid: received, change_amount: received - total,
+            cost_total: r.costTotal.toNumber(), gross_profit: r.grossProfit.toNumber(), idempotency_key: args.p_idempotency_key,
+            cashier_id: current?.id, cashier_name: current?.full_name, voided_at: null, void_reason: null, voided_by_name: null,
+            reference: args.p_payment_reference ?? null,
+            items: items.map((i, k) => ({
+              id: `ti-${n}-${k}`, product_id: i.product_id, product_name: prods[k].name, sku: prods[k].sku, unit: prods[k].unit,
+              quantity: Number(i.quantity), unit_price: Number(prods[k].sell_price), subtotal: r.lines[k].subtotal.toNumber(),
+              discount_amount: r.lines[k].discount.toNumber(), total: r.lines[k].total.toNumber(), gross_profit: r.lines[k].grossProfit.toNumber(),
+            })),
+          }
+          db.transactions.push(t)
+          return { data: { ...saleResult(t), replayed: false }, error: null }
+        }
+        case 'get_transactions': {
+          const all = perms(args.p_outlet_id).includes('transactions.view_all')
+          const search = String(args.p_search ?? '').toLowerCase()
+          const list = db.transactions
+            .filter((t) => all || t.cashier_id === current?.id)
+            .filter((t) => !args.p_status || t.status === args.p_status)
+            .filter((t) => !args.p_method || t.payment_method === args.p_method)
+            .filter((t) => !search || String(t.number).toLowerCase().includes(search) || (t.items as Row[]).some((i) => String(i.product_name).toLowerCase().includes(search)))
+            .slice()
+            .reverse()
+          const done = list.filter((t) => t.status === 'completed')
+          return {
+            data: {
+              scope: all ? 'outlet' : 'own',
+              total: list.length,
+              completed_count: done.length,
+              completed_amount: done.reduce((n, t) => n + Number(t.total), 0),
+              items: list.map((t) => ({ ...saleResult(t), customer_name: t.customer_name, cashier_name: t.cashier_name, items: (t.items as Row[]).map((i) => i.product_name).join(', ') })),
+            },
+            error: null,
+          }
+        }
+        case 'get_transaction_detail': {
+          const t = db.transactions.find((x) => x.id === args.p_transaction_id)
+          if (!t) return { data: null, error: { code: 'P0002', message: 'Transaksi tidak ditemukan' } }
+          const p = perms('o-tkl')
+          const profit = p.includes('profit.view')
+          return {
+            data: {
+              ...t,
+              cost_total: profit ? t.cost_total : null,
+              gross_profit: profit ? t.gross_profit : null,
+              items: (t.items as Row[]).map((i) => ({ ...i, gross_profit: profit ? i.gross_profit : null })),
+              can_void: t.status === 'completed' && p.includes('transactions.void'),
+              outlet: { name: 'MUN Parfum Takalar', code: 'TKL', address: 'Jl. Poros Takalar', phone: '0812-0000-0000' },
+              receipt_footer: 'Terima kasih atas kunjungan Anda',
+              payments: [{ method: t.payment_method, amount: t.total, amount_received: t.amount_paid, change_amount: t.change_amount, reference: t.reference }],
+            },
+            error: null,
+          }
+        }
+        case 'void_transaction': {
+          const t = db.transactions.find((x) => x.id === args.p_transaction_id)!
+          if (!perms('o-tkl').includes('transactions.void')) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin transactions.void diperlukan' } }
+          for (const i of t.items as Row[]) {
+            const p = db.products.find((x) => x.id === i.product_id)!
+            p.current_stock = Number(p.current_stock) + Number(i.quantity)
+          }
+          Object.assign(t, { status: 'void', voided_at: '2026-11-21T16:00:00Z', void_reason: args.p_reason, voided_by_name: current?.full_name })
+          return { data: saleResult(t), error: null }
+        }
         case 'get_stock_summary': {
           const act = db.products.filter((p) => p.outlet_id === args.p_outlet_id && p.is_active)
           const st = (p: Row) => Number(p.current_stock)
@@ -335,6 +385,80 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
         default:
           throw new Error('rpc tidak didukung: ' + fn)
       }
+  }
+
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: sessionOf(current) }, error: null }),
+      onAuthStateChange: (cb: (event: string, session: unknown) => void) => {
+        listeners.add(cb)
+        return { data: { subscription: { unsubscribe: () => listeners.delete(cb) } } }
+      },
+      signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
+        calls.signIn.push(email)
+        const u = Object.values(USERS).find((x) => x.email === email && x.password === password)
+        if (!u) return { data: { session: null }, error: { message: 'Invalid login credentials' } }
+        current = u
+        return { data: { session: sessionOf(u) }, error: null }
+      },
+      signOut: async () => {
+        calls.signOut++
+        current = null
+        return { error: null }
+      },
+    },
+    from: (table: string) => {
+      const noop = (r: Row) => r
+      switch (table) {
+        case 'profiles':
+          return new Query(
+            () =>
+              current
+                ? [{ id: current.id, full_name: current.full_name, username: current.username ?? null, is_owner: !!current.is_owner, is_active: true }]
+                : [],
+            null, noop, table, calls.writes,
+          )
+        case 'products':
+          // seperti column privilege: cost_price tidak pernah dikembalikan dari tabel
+          return new Query(
+            () => db.products.filter((p) => perms(p.outlet_id).length > 0).map((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'cost_price'))),
+            null, noop, table, calls.writes,
+          )
+        case 'product_costs':
+          return new Query(
+            () =>
+              db.products
+                .filter((p) => perms(p.outlet_id).includes('cost.view'))
+                .map((p) => ({ product_id: p.id, outlet_id: p.outlet_id, cost_price: p.cost_price })),
+            null, noop, table, calls.writes,
+          )
+        case 'categories':
+          return new Query(
+            () => db.categories.filter((c) => perms(c.outlet_id).length > 0),
+            null,
+            (r) => {
+              const row = { id: `c-${db.categories.length + 1}`, sort_order: 0, is_active: true, ...r }
+              db.categories.push(row)
+              return row
+            },
+            table,
+            calls.writes,
+          )
+        case 'app_settings':
+          return new Query(() => db.settings, null, noop, table, calls.writes)
+        default:
+          throw new Error('tabel tidak didukung: ' + table)
+      }
+    },
+    rpc: async (fn: string, args: Record<string, unknown> = {}) => {
+      calls.rpc.push({ fn, args })
+      if (db.failRpc[fn]) return { data: null, error: db.failRpc[fn] }
+      const result = await runRpc(fn, args)
+      if (db.dropResponseOnce[fn]) {
+        delete db.dropResponseOnce[fn]
+        return { data: null, error: { message: 'TypeError: Failed to fetch' } }
+      }
+      return result
     },
     storage: {
       from: () => ({
