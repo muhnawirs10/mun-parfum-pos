@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider } from '@/features/auth/auth-context'
+import { OfflineBanner } from '@/components/layout/offline-banner'
 import { routes } from '@/router'
 import { createFakeSupabase, seedDb, type FakeDb, type FakeUser } from './fake-supabase'
 
@@ -15,6 +16,7 @@ export function renderRoute(path: string, user: FakeUser | null = null, db: Fake
   const utils = render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider client={fake.client} staffDomain="staff.munparfum.local">
+        <OfflineBanner />
         <RouterProvider router={router} />
       </AuthProvider>
       <Toaster />

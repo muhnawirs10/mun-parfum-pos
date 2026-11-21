@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
-import { identifierToEmail } from './identifier'
+import { identifierToEmail } from './identifier-email'
 import { hasPermission, type OutletAccess, type Permission } from './permissions'
 
 export interface Profile {

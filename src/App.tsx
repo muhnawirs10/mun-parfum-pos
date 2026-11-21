@@ -6,6 +6,8 @@ import { AuthProvider } from '@/features/auth/auth-context'
 import { env } from '@/lib/env'
 import { supabase } from '@/lib/supabase'
 import { createAppRouter } from './router'
+import { PwaUpdater } from './pwa/pwa-updater'
+import { OfflineBanner } from '@/components/layout/offline-banner'
 
 export default function App() {
   const [queryClient] = useState(
@@ -23,9 +25,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider client={supabase} staffDomain={env?.VITE_STAFF_EMAIL_DOMAIN ?? 'staff.munparfum.local'}>
+        <OfflineBanner />
         <RouterProvider router={router} />
       </AuthProvider>
       <Toaster position="top-center" richColors closeButton />
+      <PwaUpdater />
     </QueryClientProvider>
   )
 }

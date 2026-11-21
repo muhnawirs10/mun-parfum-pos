@@ -83,8 +83,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ✅ Selesai |
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ✅ Selesai |
 | 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | ✅ Selesai |
-| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | ⏳ Berikutnya |
-| 9 | E2E test, security audit, deployment | – |
+| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | ✅ Selesai |
+| 9 | E2E test, security audit, deployment | ⏳ Berikutnya |
 
 Setiap fase ditutup dengan: build, unit test, tes database, pemeriksaan console
 browser, perbaikan bug, dan laporan.
@@ -345,6 +345,41 @@ saya: nama & kata sandi; pesan struk; izin stok minus). Halaman sementara
 - **Belum diuji**: `index.ts` di runtime Deno/Supabase (Deno tidak tersedia di
   lingkungan pengembangan). Wajib dicoba setelah `supabase functions deploy`.
 
+## Catatan Fase 8
+
+**PWA** (vite-plugin-pwa): manifest (nama, `standalone`, `lang: id`, warna
+tema, pintasan Kasir & Laporan), ikon 192/512/maskable/apple-touch/favicon
+dan 4 splash iOS dibuat dari `scripts/icon.svg`
+(`scripts/generate-icons.cjs`), meta iOS. Service worker: precache shell
+aplikasi; foto produk CacheFirst; **data Supabase selalu NetworkOnly**
+(bukan POS offline). Pembaruan mode *prompt* ("Perbarui" setelah transaksi
+selesai, cek tiap 30 menit). Kartu "Pasang aplikasi" di menu Lainnya
+(tombol instal Chrome/Android; petunjuk Safari iPad/iPhone; disembunyikan
+bila sudah terpasang). Banner offline dipindah ke tingkat aplikasi (tampil
+juga di layar login) + banner "Koneksi pulih" dengan tombol **Coba lagi**.
+
+**Optimasi**: semua halaman dimuat lazy; zod dikeluarkan dari jalur awal
+(validasi env tanpa zod); vendor dipisah (react, supabase, query) agar tetap
+ter-cache saat update. Muatan awal: **1.035 KB → ~700 KB (300 → ~209 KB
+gzip)**, kode aplikasi awal 33 KB gzip. Pustaka opsional jsPDF yang tidak
+dipakai tidak di-precache. Tablet: `touch-action: manipulation` (tanpa jeda
+ketuk/zoom tak sengaja) dan `overscroll-behavior: none` (tarik-muat-ulang
+tidak memotong transaksi).
+
+**Hasil uji Fase 8**
+
+- Unit/komponen: **158 lulus** (6 baru: instal Chrome/iPad/terpasang,
+  appinstalled, notifikasi pembaruan tidak otomatis, banner koneksi pulih).
+- `scripts/check-pwa.cjs` di Chromium terhadap build produksi: **15/15
+  lulus**, 3 kali berturut-turut — termasuk dapat diinstal, SW mengendalikan
+  halaman, aplikasi terbuka saat offline, API tidak dilayani cache.
+- Alur lengkap setelah login (tablet & ponsel): 0 error console, tanpa
+  overflow, unduhan PDF/Excel tetap berfungsi.
+- Temuan saat pengujian: banner offline sebelumnya tidak tampil di layar
+  login (diperbaiki); dua kegagalan lain berasal dari skrip uji (waktu tunggu
+  dan sesi CDP yang mengganggu emulasi offline Playwright), bukan aplikasi.
+- **Belum**: pemasangan di perangkat Android/iPad fisik dan Lighthouse.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
@@ -369,5 +404,5 @@ saya: nama & kata sandi; pesan struk; izin stok minus). Halaman sementara
 | 18 | Export Excel | ✅ file .xlsx dibuat, dibuka ulang (zip) dan diperiksa isinya | `export.test.ts`, `reports-page.test.tsx` |
 | 19 | Pembatasan akses outlet | ✅ DB + UI (termasuk outlet/penugasan nonaktif) | `tests/db/security.test.ts` |
 | 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI (coba lagi setelah respons hilang) | `tests/db/sales.test.ts` |
-| 21 | Internet terputus | ✅ indikator, tombol bayar nonaktif, tidak ada klaim sukses | `app-shell.test.tsx`, `pos-page.test.tsx` |
-| 22 | Instalasi PWA | ⏳ Fase 8 | – |
+| 21 | Internet terputus | ✅ indikator di semua layar, tombol bayar nonaktif, tidak ada klaim sukses, banner "Koneksi pulih" + Coba lagi; diuji juga di Chromium (offline sungguhan) | `pwa.test.tsx`, `pos-page.test.tsx`, `scripts/check-pwa.cjs` |
+| 22 | Instalasi PWA | ✅ Chromium menyatakan dapat diinstal (CDP `getInstallabilityErrors` kosong); manifest, ikon, SW, offline shell; tombol instal & petunjuk iOS diuji. Pemasangan di perangkat Android/iPad fisik belum | `scripts/check-pwa.cjs`, `pwa.test.tsx` |

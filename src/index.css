@@ -40,6 +40,10 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
+    /* tanpa jeda ketuk-ganda/zoom tak sengaja di tablet */
+    touch-action: manipulation;
+    /* cegah tarik-untuk-muat-ulang memotong transaksi */
+    overscroll-behavior-y: none;
   }
 
   body {

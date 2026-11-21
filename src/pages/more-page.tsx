@@ -10,6 +10,7 @@ import { useAuth } from '@/features/auth/auth-context'
 import { ROLE_LABEL } from '@/features/auth/permissions'
 import { NAV_ITEMS, type NavItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
+import { InstallCard } from '@/pwa/install-card'
 
 const GROUP_LABEL: Record<NavItem['group'], string> = {
   utama: 'Menu Utama',
@@ -35,6 +36,7 @@ export function MorePage() {
   return (
     <>
       <PageHeader icon={Settings} title="Lainnya" />
+      <InstallCard />
       <div className="relative mb-5">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
         <Input

@@ -31,6 +31,33 @@ dan file `public/_redirects` berisi `/* /index.html 200`.
 
 **Cloudflare Pages**: build `npm run build`, output `dist`. SPA fallback otomatis.
 
+## Header cache untuk PWA
+
+Agar pembaruan aplikasi terdeteksi, `sw.js`, `index.html`, dan
+`manifest.webmanifest` **tidak boleh** di-cache lama oleh hosting/CDN.
+File di `assets/` aman di-cache permanen (nama berisi hash).
+
+Vercel (`vercel.json`):
+
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ]
+}
+```
+
+Netlify (`public/_headers`):
+
+```
+/sw.js
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+```
+
 ## Wajib HTTPS
 
 PWA (service worker, install prompt) hanya bekerja di HTTPS. Semua host di

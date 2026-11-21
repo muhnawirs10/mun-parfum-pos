@@ -11,7 +11,7 @@ Web App + PWA, cloud (Supabase/PostgreSQL), multi-outlet.
 - Bahasa Indonesia · Rupiah · zona waktu **WITA (Asia/Makassar)**.
 
 Status fase: lihat [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
-**Belum production-ready** — fitur kasir, laporan UI, dan PWA masih dalam pengerjaan.
+**Belum production-ready** — semua fitur terpasang dan teruji secara lokal; pengujian terhadap project Supabase sungguhan, E2E, dan audit keamanan (Fase 9) belum dilakukan.
 
 ## Teknologi
 
@@ -28,8 +28,12 @@ src/
   lib/decimal.ts        aritmetika desimal BigInt (tanpa floating point)
   lib/sale-calc.ts      aturan perhitungan penjualan (identik dengan RPC)
   lib/format.ts         format Rupiah, angka, tanggal WITA
-  pages/                halaman
+  features/             modul per fitur (pos, products, stock, reports, …)
+  pwa/                  pasang aplikasi & pembaruan service worker
+  pages/                beranda, lainnya, 404
 supabase/migrations/    skema, keamanan/RLS, RPC
+supabase/functions/     Edge Function admin-users (akun karyawan)
+scripts/                ikon PWA, pemeriksaan PWA
 tests/db/               tes integrasi database (RLS, RPC, perhitungan)
 docs/                   setup Supabase, deployment, PWA
 ```
@@ -70,6 +74,12 @@ di-stub oleh `tests/db/supabase-stub.sql`). Database `mun_pos_test` dibuat ulang
 DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run test:db
 ```
 
+Pemeriksaan PWA di Chromium (setelah `npm run build` dan `npx vite preview --port 4173`):
+
+```bash
+npm run check:pwa
+```
+
 Typecheck, lint, build:
 
 ```bash
@@ -82,3 +92,4 @@ npm run typecheck && npm run lint && npm run build
 - [Setup Supabase](docs/SUPABASE_SETUP.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Instalasi PWA](docs/PWA_INSTALL.md)
+- Edge Function: `supabase/functions/admin-users`
