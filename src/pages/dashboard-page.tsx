@@ -4,6 +4,7 @@ import { BarChart3, Boxes, ChevronRight, Moon, Package, Receipt, Sun, Wallet } f
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatDateWita, formatTimeWita, greetingWita } from '@/lib/format'
+import { useAuth } from '@/features/auth/auth-context'
 
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => new Date())
@@ -23,6 +24,7 @@ const QUICK = [
 
 export function DashboardPage() {
   const now = useNow()
+  const { profile, activeOutlet } = useAuth()
   const greeting = greetingWita(now)
   const night = greeting === 'Selamat Malam'
 
@@ -34,8 +36,10 @@ export function DashboardPage() {
             {night ? <Moon className="h-7 w-7" /> : <Sun className="h-7 w-7" />}
           </span>
           <div>
-            <p className="text-xl font-bold">{greeting}!</p>
-            <p className="text-sm text-muted-foreground">MUN PARFUM POS</p>
+            <p className="text-xl font-bold">
+              {greeting}, {profile?.full_name ?? ''}!
+            </p>
+            <p className="text-sm text-muted-foreground">{activeOutlet?.outlet_name ?? 'MUN PARFUM POS'}</p>
           </div>
         </div>
         <div className="text-right">

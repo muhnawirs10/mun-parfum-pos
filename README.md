@@ -1,54 +1,84 @@
-# React + TypeScript + Vite
+# MUN PARFUM POS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplikasi kasir (POS) dan inventaris untuk toko parfum isi ulang —
+Web App + PWA, cloud (Supabase/PostgreSQL), multi-outlet.
 
-Currently, two official plugins are available:
+- **Inventaris sederhana**: setiap varian parfum = satu produk dengan stok sendiri
+  (ML, PCS, GRAM, UNIT, BOTOL; ML/GRAM mendukung desimal).
+- **Penjualan atomik** di database dengan snapshot harga & HPP, idempotency key,
+  dan validasi stok.
+- **Keamanan** dengan Supabase Auth + Row Level Security; HPP & laba dibatasi izin.
+- Bahasa Indonesia · Rupiah · zona waktu **WITA (Asia/Makassar)**.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Status fase: lihat [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
+**Belum production-ready** — fitur kasir, laporan UI, dan PWA masih dalam pengerjaan.
 
-## Expanding the ESLint configuration
+## Teknologi
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+React 19 · TypeScript · Vite 6 · Tailwind CSS 3 · komponen gaya shadcn/ui (Radix)
+· Lucide · TanStack Query · Zod · Supabase (Auth, PostgreSQL, RLS, RPC) · Vitest.
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Struktur
+
+```
+src/
+  components/ui/        komponen dasar (Button, Card, Input, …)
+  components/layout/    AppShell, BottomNav, OfflineBanner, PageHeader
+  features/auth/        AuthProvider, login, guard peran & izin
+  lib/decimal.ts        aritmetika desimal BigInt (tanpa floating point)
+  lib/sale-calc.ts      aturan perhitungan penjualan (identik dengan RPC)
+  lib/format.ts         format Rupiah, angka, tanggal WITA
+  pages/                halaman
+supabase/migrations/    skema, keamanan/RLS, RPC
+tests/db/               tes integrasi database (RLS, RPC, perhitungan)
+docs/                   setup Supabase, deployment, PWA
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Menjalankan secara lokal
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Prasyarat: Node.js 20+.
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```bash
+npm install
 ```
+
+```bash
+cp .env.example .env.local
+```
+
+Isi `.env.local` (lihat [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md)), lalu:
+
+```bash
+npm run dev
+```
+
+Buka <http://localhost:5173> (juga dapat diakses dari tablet di jaringan yang sama).
+Tanpa `.env.local` aplikasi menampilkan layar "Konfigurasi Supabase belum diisi".
+
+## Pengujian
+
+Unit & komponen (tanpa database):
+
+```bash
+npm test
+```
+
+Tes integrasi database (membutuhkan PostgreSQL 15+; skema `auth` Supabase
+di-stub oleh `tests/db/supabase-stub.sql`). Database `mun_pos_test` dibuat ulang setiap kali:
+
+```bash
+DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run test:db
+```
+
+Typecheck, lint, build:
+
+```bash
+npm run typecheck && npm run lint && npm run build
+```
+
+## Dokumentasi
+
+- [Rencana implementasi & aturan perhitungan](IMPLEMENTATION_PLAN.md)
+- [Setup Supabase](docs/SUPABASE_SETUP.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Instalasi PWA](docs/PWA_INSTALL.md)

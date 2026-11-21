@@ -77,8 +77,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | Fase | Lingkup | Status |
 |---|---|---|
 | 1 | Audit repository, fondasi proyek, tema, layout, routing, utilitas desimal/format, unit test, dokumentasi | ✅ Selesai |
-| 2 | Migration database, Supabase Auth, RLS, peran & izin, RPC atomik, tes database | ⏳ Berikutnya |
-| 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | – |
+| 2 | Migration database, Supabase Auth, RLS, peran & izin, RPC atomik, tes database | ✅ Selesai |
+| 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ⏳ Berikutnya |
 | 4 | Stok masuk/keluar/opname & riwayat pergerakan | – |
 | 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | – |
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | – |
@@ -102,3 +102,70 @@ browser, perbaikan bug, dan laporan.
 - Diuji: 21 unit/komponen test lulus; build produksi sukses; dijalankan di
   Chromium 1280×800 (tablet landscape) dan 390×844 (ponsel): 0 console error,
   tanpa overflow horizontal; banner offline muncul/hilang sesuai koneksi.
+
+## Catatan Fase 2
+
+**Migration** (`supabase/migrations/`):
+
+- `0100_core_schema` — 14 tabel (`profiles, outlets, outlet_users, categories,
+  products, outlet_counters, cash_sessions, transactions, transaction_items,
+  payments, stock_movements, expenses, audit_logs, app_settings`), UUID PK, FK
+  komposit `(product_id, outlet_id)` agar item/pergerakan tidak bisa lintas
+  outlet, check constraint (total = subtotal − diskon, laba = omzet − HPP,
+  stok_sesudah = stok_sebelum + qty, satuan bulat untuk PCS/UNIT/BOTOL), index.
+- `0200_security` — fungsi izin (`is_owner`, `has_outlet_access`,
+  `has_permission`, `my_access`), trigger profil otomatis, trigger penjaga
+  (stok hanya lewat pergerakan; transaksi/item/pembayaran/pergerakan/audit tidak
+  bisa dihapus/diubah), audit otomatis, column privilege (HPP/laba
+  tersembunyi), RLS di 14 tabel, view sensitif dengan filter izin.
+- `0300_rpc` — `create_product`, `update_product`, `set_product_active`,
+  `adjust_stock`, `create_sale`, `void_transaction`, `open_cash_session`,
+  `close_cash_session`, `get_sales_report`, `private.bootstrap_owner`.
+
+**Frontend**: `AuthProvider` (sesi Supabase, profil, akses per outlet, outlet
+aktif), login dengan email atau username (Zod), logout, `RequireAuth`,
+`RequirePermission`, menu "Lainnya" yang difilter izin + pemilih outlet.
+
+**Hasil uji Fase 2**
+
+- Tes database: **51 lulus** pada PostgreSQL 16 sungguhan dengan stub skema
+  `auth` Supabase; query dijalankan sebagai role `authenticated`/`anon` dengan
+  klaim JWT, persis seperti PostgREST.
+- Uji mutasi: mematikan cek stok → 3 tes gagal; mematikan pencabutan izin →
+  2 tes gagal (tes terbukti mendeteksi regresi).
+- Unit/komponen: **33 lulus**. Typecheck & lint: 0 error. Build sukses.
+- Browser: layar setup (tanpa env) dan alur login dengan backend tak terjangkau
+  diuji di Chromium; satu-satunya error console adalah kegagalan jaringan yang
+  disengaja.
+- Seed contoh + `bootstrap_owner` diuji pada database.
+
+**Belum diuji terhadap project Supabase sungguhan** (tidak tersedia di
+lingkungan pengembangan ini): GoTrue (login nyata), PostgREST, dan Security
+Advisor. Wajib diverifikasi saat project Supabase dibuat.
+
+## Status 22 pengujian wajib
+
+| # | Pengujian | Status | Lokasi |
+|---|---|---|---|
+| 1 | Login & logout | ✅ UI (klien Supabase palsu) — perlu verifikasi di Supabase nyata | `src/features/auth/auth.test.tsx` |
+| 2 | Role pengguna | ✅ DB + UI | `tests/db/security.test.ts`, `auth.test.tsx` |
+| 3 | Tambah produk | ✅ DB (UI di Fase 3) | `tests/db/products-stock.test.ts` |
+| 4 | Edit produk | ✅ DB | 〃 |
+| 5 | Hapus/nonaktifkan produk | ✅ DB | 〃 |
+| 6 | Stok masuk | ✅ DB | 〃 |
+| 7 | Stok keluar | ✅ DB | 〃 |
+| 8 | Penjualan 5 ml | ✅ DB + unit | `tests/db/sales.test.ts`, `sale-calc.test.ts` |
+| 9 | Penjualan 10 ml | ✅ DB + unit | 〃 |
+| 10 | Penjualan dengan diskon | ✅ DB + unit | 〃 |
+| 11 | Pembayaran tunai | ✅ DB | `tests/db/sales.test.ts` |
+| 12 | Pembayaran QRIS | ✅ DB | 〃 |
+| 13 | Perhitungan kembalian | ✅ DB + unit | 〃 |
+| 14 | Perhitungan HPP | ✅ DB + unit | 〃 |
+| 15 | Perhitungan laba | ✅ DB + unit | `tests/db/reports.test.ts` |
+| 16 | Closing harian | ✅ DB (sesi kas); cetak PDF di Fase 6 | `tests/db/reports.test.ts` |
+| 17 | Export PDF | ⏳ Fase 6 | – |
+| 18 | Export Excel | ⏳ Fase 6 | – |
+| 19 | Pembatasan akses outlet | ✅ DB + UI | `tests/db/security.test.ts` |
+| 20 | Pencegahan transaksi ganda | ✅ DB, termasuk 10 permintaan paralel | `tests/db/sales.test.ts` |
+| 21 | Internet terputus | ✅ indikator UI; perilaku checkout di Fase 5 | `app-shell.test.tsx` |
+| 22 | Instalasi PWA | ⏳ Fase 8 | – |

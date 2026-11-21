@@ -1,6 +1,7 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderRoute } from '@/test/render'
+import { USERS } from '@/test/fake-supabase'
 import { NAV_ITEMS } from '@/lib/navigation'
 
 function setOnline(value: boolean) {
@@ -11,16 +12,17 @@ function setOnline(value: boolean) {
 describe('App shell', () => {
   afterEach(() => setOnline(true))
 
-  it('menampilkan navigasi bawah dengan tombol Kasir', () => {
-    renderRoute('/')
-    const nav = screen.getByRole('navigation', { name: 'Navigasi utama' })
+  it('menampilkan navigasi bawah dengan tombol Kasir', async () => {
+    renderRoute('/', USERS.owner)
+    const nav = await screen.findByRole('navigation', { name: 'Navigasi utama' })
     for (const label of ['Beranda', 'Produk', 'Kasir', 'Laporan', 'Lainnya']) {
       expect(nav).toHaveTextContent(label)
     }
   })
 
-  it('menampilkan indikator offline saat koneksi terputus dan hilang saat pulih', () => {
-    renderRoute('/')
+  it('menampilkan indikator offline saat koneksi terputus dan hilang saat pulih', async () => {
+    renderRoute('/', USERS.owner)
+    await screen.findByRole('navigation', { name: 'Navigasi utama' })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     act(() => setOnline(false))
     expect(screen.getByRole('alert')).toHaveTextContent('Tidak ada koneksi internet')
@@ -28,18 +30,19 @@ describe('App shell', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('semua 10 halaman wajib dapat dibuka', () => {
+  it('semua 10 halaman wajib dapat dibuka', async () => {
     expect(NAV_ITEMS).toHaveLength(10)
     for (const item of NAV_ITEMS) {
-      const { unmount } = renderRoute(item.to)
-      expect(screen.getAllByText(item.label).length).toBeGreaterThan(0)
+      const { unmount } = renderRoute(item.to, USERS.owner)
+      expect((await screen.findAllByText(item.label)).length).toBeGreaterThan(0)
+      expect(screen.queryByText('Akses ditolak')).not.toBeInTheDocument()
       unmount()
     }
   })
 
   it('menu Lainnya dapat dicari', async () => {
-    renderRoute('/lainnya')
-    await userEvent.type(screen.getByLabelText('Cari menu'), 'pengel')
+    renderRoute('/lainnya', USERS.owner)
+    await userEvent.type(await screen.findByLabelText('Cari menu'), 'pengel')
     expect(screen.getByText('Pengeluaran')).toBeInTheDocument()
     expect(screen.queryByText('Karyawan')).not.toBeInTheDocument()
     await userEvent.clear(screen.getByLabelText('Cari menu'))
@@ -47,8 +50,8 @@ describe('App shell', () => {
     expect(screen.getByText('Menu tidak ditemukan.')).toBeInTheDocument()
   })
 
-  it('rute tidak dikenal menampilkan 404', () => {
-    renderRoute('/tidak-ada')
-    expect(screen.getByText('Halaman tidak ditemukan')).toBeInTheDocument()
+  it('rute tidak dikenal menampilkan 404', async () => {
+    renderRoute('/tidak-ada', USERS.owner)
+    expect(await screen.findByText('Halaman tidak ditemukan')).toBeInTheDocument()
   })
 })

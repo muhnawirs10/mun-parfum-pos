@@ -1,5 +1,7 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { AppShell } from '@/components/layout/app-shell'
+import { RequireAuth, RequirePermission } from '@/features/auth/guards'
+import { LoginPage } from '@/features/auth/login-page'
 import { DashboardPage } from '@/pages/dashboard-page'
 import { MorePage } from '@/pages/more-page'
 import { NotFoundPage } from '@/pages/not-found-page'
@@ -18,19 +20,27 @@ const PHASE: Record<string, string> = {
   '/pengaturan': 'Fase 7',
 }
 
-const item = (to: string) => NAV_ITEMS.find((i) => i.to === to)!
-
-export const routes = [
+export const routes: RouteObject[] = [
+  { path: '/masuk', element: <LoginPage /> },
   {
-    element: <AppShell />,
+    element: <RequireAuth />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'lainnya', element: <MorePage /> },
-      ...Object.entries(PHASE).map(([to, phase]) => ({
-        path: to.slice(1),
-        element: <PlaceholderPage item={item(to)} phase={phase} />,
-      })),
-      { path: '*', element: <NotFoundPage /> },
+      {
+        element: <AppShell />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'lainnya', element: <MorePage /> },
+          ...NAV_ITEMS.filter((i) => PHASE[i.to]).map((item) => ({
+            path: item.to.slice(1),
+            element: (
+              <RequirePermission anyOf={item.permissions}>
+                <PlaceholderPage item={item} phase={PHASE[item.to]} />
+              </RequirePermission>
+            ),
+          })),
+          { path: '*', element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
 ]

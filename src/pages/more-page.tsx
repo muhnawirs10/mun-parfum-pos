@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Search, Settings } from 'lucide-react'
+import { ChevronRight, LogOut, Search, Settings, ShieldCheck, Store } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useAuth } from '@/features/auth/auth-context'
+import { ROLE_LABEL } from '@/features/auth/permissions'
 import { NAV_ITEMS, type NavItem } from '@/lib/navigation'
+import { cn } from '@/lib/utils'
 
 const GROUP_LABEL: Record<NavItem['group'], string> = {
   utama: 'Menu Utama',
@@ -13,11 +18,16 @@ const GROUP_LABEL: Record<NavItem['group'], string> = {
 }
 
 export function MorePage() {
+  const { profile, outlets, activeOutlet, setActiveOutlet, can, signOut } = useAuth()
   const [q, setQ] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
+
   const items = useMemo(() => {
     const s = q.trim().toLowerCase()
-    return s ? NAV_ITEMS.filter((i) => `${i.label} ${i.description}`.toLowerCase().includes(s)) : NAV_ITEMS
-  }, [q])
+    return NAV_ITEMS.filter((i) => !i.permissions || can(...i.permissions)).filter(
+      (i) => !s || `${i.label} ${i.description}`.toLowerCase().includes(s),
+    )
+  }, [q, can])
   const groups = (Object.keys(GROUP_LABEL) as NavItem['group'][])
     .map((g) => ({ g, list: items.filter((i) => i.group === g) }))
     .filter((x) => x.list.length > 0)
@@ -25,7 +35,7 @@ export function MorePage() {
   return (
     <>
       <PageHeader icon={Settings} title="Lainnya" />
-      <div className="relative mb-6">
+      <div className="relative mb-5">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={q}
@@ -35,6 +45,67 @@ export function MorePage() {
           className="h-12 pl-11"
         />
       </div>
+
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        <Card className="p-4">
+          <div className="flex items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/20">
+              <Store className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{activeOutlet?.outlet_name}</p>
+              <p className="text-sm text-muted-foreground">Kode outlet {activeOutlet?.outlet_code}</p>
+            </div>
+          </div>
+          {outlets.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Pilih outlet">
+              {outlets.map((o) => (
+                <button
+                  key={o.outlet_id}
+                  type="button"
+                  onClick={() => setActiveOutlet(o.outlet_id)}
+                  aria-pressed={o.outlet_id === activeOutlet?.outlet_id}
+                  className={cn(
+                    'h-10 rounded-full border px-4 text-sm font-semibold transition-colors',
+                    o.outlet_id === activeOutlet?.outlet_id
+                      ? 'border-secondary bg-secondary text-secondary-foreground'
+                      : 'bg-card hover:bg-muted',
+                  )}
+                >
+                  {o.outlet_code}
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+        <Card className="flex items-center gap-4 p-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/20">
+            <ShieldCheck className="h-6 w-6" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold">{profile?.full_name}</p>
+            <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              {profile?.username && <span>@{profile.username}</span>}
+              {activeOutlet && <Badge variant="dark">{ROLE_LABEL[activeOutlet.role]}</Badge>}
+            </p>
+          </div>
+          <Button
+            variant="destructive-ghost"
+            disabled={signingOut}
+            onClick={async () => {
+              setSigningOut(true)
+              try {
+                await signOut()
+              } finally {
+                setSigningOut(false)
+              }
+            }}
+          >
+            <LogOut /> Keluar
+          </Button>
+        </Card>
+      </div>
+
       <div className="space-y-6">
         {groups.map(({ g, list }) => (
           <section key={g}>

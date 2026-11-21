@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
+import { AuthProvider } from '@/features/auth/auth-context'
+import { env } from '@/lib/env'
+import { supabase } from '@/lib/supabase'
 import { createAppRouter } from './router'
 
 export default function App() {
@@ -19,7 +22,9 @@ export default function App() {
   const [router] = useState(createAppRouter)
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AuthProvider client={supabase} staffDomain={env?.VITE_STAFF_EMAIL_DOMAIN ?? 'staff.munparfum.local'}>
+        <RouterProvider router={router} />
+      </AuthProvider>
       <Toaster position="top-center" richColors closeButton />
     </QueryClientProvider>
   )
