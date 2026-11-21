@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownAZ, ArrowUpZA, Package, RefreshCw, ScanLine, Search, ShoppingCart, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpZA, Package, RefreshCw, ScanLine, Search, ShoppingCart, Wallet, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -13,6 +13,8 @@ import { useCategories, useProducts } from '@/features/products/queries'
 import { stockLevel } from '@/features/products/stock-badge'
 import { SaleSuccessDialog } from '@/features/transactions/receipt-dialog'
 import { useAllowNegativeStock, useCreateSale } from '@/features/transactions/queries'
+import { useMyCashSession } from '@/features/reports/api'
+import { CashSessionCard } from '@/features/reports/cash-session-card'
 import { useOnlineStatus } from '@/hooks/use-online-status'
 import { Decimal } from '@/lib/decimal'
 import { toUserMessage } from '@/lib/errors'
@@ -49,6 +51,8 @@ export function PosPage() {
   const [payError, setPayError] = useState<string | null>(null)
   const [mobileCart, setMobileCart] = useState(false)
   const [successId, setSuccessId] = useState<string | null>(null)
+  const [cashOpen, setCashOpen] = useState(false)
+  const cashSession = useMyCashSession()
 
   const catalog = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -154,7 +158,12 @@ export function PosPage() {
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
             <ShoppingCart className="h-5 w-5" />
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">Kasir</h1>
+          <h1 className="flex-1 text-2xl font-bold tracking-tight">Kasir</h1>
+          {cashSession.isSuccess && (
+            <Button size="sm" variant={cashSession.data ? 'outline' : 'dark'} onClick={() => setCashOpen(true)}>
+              <Wallet /> {cashSession.data ? 'Kas dibuka' : 'Buka kas'}
+            </Button>
+          )}
         </header>
         <div className="relative mb-3">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -295,6 +304,11 @@ export function PosPage() {
         onConfirm={onConfirmPayment}
       />
       <SaleSuccessDialog transactionId={successId} onNewSale={() => setSuccessId(null)} />
+      <Dialog open={cashOpen} onOpenChange={setCashOpen}>
+        <DialogContent title="Kas" className="max-w-md">
+          <CashSessionCard className="border-0 shadow-none" />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

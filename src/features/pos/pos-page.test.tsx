@@ -190,3 +190,24 @@ describe('Kasir', () => {
     expect(screen.queryByRole('button', { name: 'Pilih BOTOL SPRAY 30ML' })).not.toBeInTheDocument()
   })
 })
+
+describe('Kas di halaman Kasir', () => {
+  it('kasir membuka kas dari halaman kasir; transaksi tercatat dalam sesi', async () => {
+    const { fake, db } = await openPos()
+    await user.click(screen.getByRole('button', { name: /Buka kas/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Kas' })
+    await user.type(within(dialog).getByLabelText('Kas awal (Rp)'), '50.000')
+    await user.click(within(dialog).getByRole('button', { name: /Buka kas/ }))
+    expect(await within(dialog).findByText('Kas seharusnya di laci')).toBeInTheDocument()
+    expect(within(dialog).getByText('Closing kas dilakukan oleh admin/pemilik.')).toBeInTheDocument()
+    expect(fake.calls.rpc.find((c) => c.fn === 'open_cash_session')!.args.p_opening_cash).toBe('50000')
+    await user.keyboard('{Escape}')
+    expect(await screen.findByRole('button', { name: /Kas dibuka/ })).toBeInTheDocument()
+
+    await addMl('VALENTINE / SCANDALOUS', '10')
+    const pd = await pay('Tunai', '20.000')
+    await user.click(within(pd).getByRole('button', { name: 'Bayar Rp20.000' }))
+    await screen.findByRole('dialog', { name: 'Transaksi berhasil' })
+    expect(db.transactions[0].cash_session_id).toBe(db.cashSessions[0].id)
+  })
+})

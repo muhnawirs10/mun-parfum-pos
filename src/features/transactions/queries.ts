@@ -8,7 +8,7 @@ function useCtx() {
   return { client, outletId: activeOutlet.outlet_id }
 }
 
-const AFTER_SALE = ['products', 'stock-movements', 'stock-summary', 'dashboard', 'transactions', 'transaction']
+const AFTER_SALE = ['products', 'stock-movements', 'stock-summary', 'dashboard', 'transactions', 'transaction', 'sales-report', 'my-cash-session', 'cash-sessions']
 
 export function useTransactions(filter: api.TransactionFilter) {
   const { client, outletId } = useCtx()

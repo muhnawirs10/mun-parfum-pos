@@ -10,11 +10,11 @@ import { ProductsPage } from '@/features/products/products-page'
 import { StockPage } from '@/features/stock/stock-page'
 import { PosPage } from '@/features/pos/pos-page'
 import { TransactionsPage } from '@/features/transactions/transactions-page'
+import { ReportsPage } from '@/features/reports/reports-page'
+import { ExpensesPage } from '@/features/expenses/expenses-page'
 import { NAV_ITEMS } from '@/lib/navigation'
 
 const PHASE: Record<string, string> = {
-  '/laporan': 'Fase 6',
-  '/pengeluaran': 'Fase 6',
   '/karyawan': 'Fase 7',
   '/outlet': 'Fase 7',
   '/pengaturan': 'Fase 7',
@@ -39,6 +39,22 @@ export const routes: RouteObject[] = [
             ),
           },
           { path: 'transaksi', element: <TransactionsPage /> },
+          {
+            path: 'laporan',
+            element: (
+              <RequirePermission anyOf={NAV_ITEMS.find((i) => i.to === '/laporan')!.permissions}>
+                <ReportsPage />
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'pengeluaran',
+            element: (
+              <RequirePermission anyOf={NAV_ITEMS.find((i) => i.to === '/pengeluaran')!.permissions}>
+                <ExpensesPage />
+              </RequirePermission>
+            ),
+          },
           {
             path: 'stok',
             element: (

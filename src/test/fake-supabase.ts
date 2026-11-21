@@ -68,6 +68,8 @@ export interface FakeDb {
   dropResponseOnce: Record<string, boolean>
   transactions: Row[]
   settings: Row[]
+  expenses: Row[]
+  cashSessions: Row[]
 }
 
 export function seedDb(): FakeDb {
@@ -114,6 +116,8 @@ export function seedDb(): FakeDb {
     dropResponseOnce: {},
     transactions: [],
     settings: [],
+    expenses: [],
+    cashSessions: [],
   }
 }
 
@@ -169,8 +173,12 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
     const match = (r: Row) => this.filters.every(([c, v]) => r[c] === v)
     if (this.mode === 'insert') {
       this.log.push({ table: this.table, op: 'insert', payload: this.payload })
-      const created = this.onInsert(this.payload!)
-      return { data: this.wantSingle ? created : [created], error: null }
+      try {
+        const created = this.onInsert(this.payload!)
+        return { data: this.wantSingle ? created : [created], error: null }
+      } catch (e) {
+        return { data: null, error: { code: '42501', message: (e as Error).message } }
+      }
     }
     if (this.mode === 'update') {
       this.log.push({ table: this.table, op: 'update', payload: this.payload })
@@ -215,8 +223,110 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
     created_at: t.created_at,
   })
 
+  const sessionJson = (s: Row) => {
+    const tx = db.transactions.filter((t) => t.status === 'completed' && t.cash_session_id === s.id)
+    const cash = tx.filter((t) => t.payment_method === 'cash').reduce((n, t) => n + Number(t.total), 0)
+    const methods = new Map<string, number>()
+    tx.forEach((t) => methods.set(t.payment_method as string, (methods.get(t.payment_method as string) ?? 0) + Number(t.total)))
+    return {
+      ...s,
+      transaction_count: tx.length,
+      sales_total: tx.reduce((n, t) => n + Number(t.total), 0),
+      cash_sales: cash,
+      by_payment_method: [...methods.entries()].map(([method, amount]) => ({ method, amount })),
+      expected_cash: (s.expected_cash_final as number | null) ?? Number(s.opening_cash) + cash,
+      closed_by_name: s.status === 'closed' ? s.opened_by_name : null,
+      note: null,
+    }
+  }
+
   async function runRpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
       switch (fn) {
+        case 'get_sales_report': {
+          const ok = perms(args.p_outlet_id ?? 'o-tkl').includes('reports.view')
+          if (!ok) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin reports.view diperlukan' } }
+          const profit = perms('o-tkl').includes('profit.view')
+          const done = db.transactions.filter((t) => t.status === 'completed')
+          const sum = (xs: Row[], k: string) => xs.reduce((n, x) => n + Number(x[k]), 0)
+          const omzet = sum(done, 'total')
+          const gross = sum(done, 'gross_profit')
+          const exp = args.p_include_expenses ? sum(db.expenses.filter((e) => !e.deleted_at), 'amount') : 0
+          const methods = new Map<string, { count: number; amount: number }>()
+          done.forEach((t) => {
+            const m = methods.get(t.payment_method as string) ?? { count: 0, amount: 0 }
+            methods.set(t.payment_method as string, { count: m.count + 1, amount: m.amount + Number(t.total) })
+          })
+          const prods = new Map<string, Row>()
+          done.flatMap((t) => t.items as Row[]).forEach((i) => {
+            const p = prods.get(i.product_id as string) ?? { product_id: i.product_id, name: i.product_name, unit: i.unit, quantity: 0, omzet: 0, gross_profit: 0 }
+            p.quantity = Number(p.quantity) + Number(i.quantity)
+            p.omzet = Number(p.omzet) + Number(i.total)
+            p.gross_profit = Number(p.gross_profit) + Number(i.gross_profit)
+            prods.set(i.product_id as string, p)
+          })
+          const ranked = [...prods.values()]
+          return {
+            data: {
+              from: args.p_from, to: args.p_to, outlet_ids: ['o-tkl'], can_view_profit: profit,
+              transaction_count: done.length, omzet, subtotal_before_discount: sum(done, 'subtotal') + sum(done, 'item_discount_total'),
+              discount_total: sum(done, 'item_discount_total') + sum(done, 'discount_amount'),
+              average_transaction: done.length ? omzet / done.length : 0, item_count: sum(done, 'item_count'),
+              cost_total: profit ? sum(done, 'cost_total') : null, gross_profit: profit ? gross : null,
+              expenses_total: profit ? exp : null, net_profit: profit ? gross - exp : null,
+              void_count: db.transactions.length - done.length,
+              qty_by_unit: ranked.length ? [{ unit: 'ML', quantity: ranked.reduce((n, p) => n + Number(p.quantity), 0) }] : [],
+              by_payment_method: [...methods.entries()].map(([method, v]) => ({ method, ...v })).sort((a, b) => b.amount - a.amount),
+              top_products: ranked.sort((a, b) => Number(b.quantity) - Number(a.quantity)).map((p) => ({ ...p, gross_profit: profit ? p.gross_profit : null })),
+              top_profit_products: profit ? [...ranked].sort((a, b) => Number(b.gross_profit) - Number(a.gross_profit)) : null,
+              by_outlet: args.p_outlet_id
+                ? [{ outlet_id: 'o-tkl', code: 'TKL', name: 'MUN Parfum Takalar', transaction_count: done.length, omzet, gross_profit: profit ? gross : null }]
+                : [
+                    { outlet_id: 'o-mks', code: 'MKS', name: 'MUN Parfum Makassar', transaction_count: 0, omzet: 0, gross_profit: profit ? 0 : null },
+                    { outlet_id: 'o-tkl', code: 'TKL', name: 'MUN Parfum Takalar', transaction_count: done.length, omzet, gross_profit: profit ? gross : null },
+                  ],
+            },
+            error: null,
+          }
+        }
+        case 'get_expenses': {
+          const p = perms(args.p_outlet_id)
+          if (!p.includes('expenses.view') && !p.includes('expenses.manage')) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin expenses.view diperlukan' } }
+          const list = db.expenses.filter((e) => !e.deleted_at && (!args.p_category || e.category === args.p_category))
+          const cats = new Map<string, { count: number; amount: number }>()
+          list.forEach((e) => {
+            const c = cats.get(e.category as string) ?? { count: 0, amount: 0 }
+            cats.set(e.category as string, { count: c.count + 1, amount: c.amount + Number(e.amount) })
+          })
+          return {
+            data: {
+              count: list.length,
+              total_amount: list.reduce((n, e) => n + Number(e.amount), 0),
+              can_manage: p.includes('expenses.manage'),
+              by_category: [...cats.entries()].map(([category, v]) => ({ category, ...v })).sort((a, b) => b.amount - a.amount),
+              items: list.map((e) => ({ ...e, created_by_name: e.created_by === current?.id ? current?.full_name : 'Lain' })).reverse(),
+            },
+            error: null,
+          }
+        }
+        case 'get_my_cash_session': {
+          const s = db.cashSessions.find((x) => x.opened_by === current?.id && x.status === 'open')
+          return { data: s ? { ...sessionJson(s), can_close: perms('o-tkl').includes('closing.perform') } : null, error: null }
+        }
+        case 'get_cash_sessions':
+          return { data: db.cashSessions.map(sessionJson), error: null }
+        case 'open_cash_session': {
+          if (db.cashSessions.some((x) => x.opened_by === current?.id && x.status === 'open')) return { data: null, error: { code: '23505', message: 'Masih ada sesi kas yang terbuka' } }
+          const s = { id: `cs-${db.cashSessions.length + 1}`, outlet_id: args.p_outlet_id, opened_by: current?.id, opened_by_name: current?.full_name, opened_at: '2026-11-21T00:00:00Z', opening_cash: Number(args.p_opening_cash), status: 'open', closed_at: null, counted_cash: null, cash_difference: null, expected_cash_final: null }
+          db.cashSessions.push(s)
+          return { data: s.id, error: null }
+        }
+        case 'close_cash_session': {
+          if (!perms('o-tkl').includes('closing.perform')) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin closing.perform diperlukan' } }
+          const s = db.cashSessions.find((x) => x.id === args.p_session_id)!
+          const j = sessionJson(s)
+          Object.assign(s, { status: 'closed', closed_at: '2026-11-21T14:00:00Z', counted_cash: Number(args.p_counted_cash), expected_cash_final: j.expected_cash, cash_difference: Number(args.p_counted_cash) - Number(j.expected_cash) })
+          return { data: sessionJson(s), error: null }
+        }
         case 'create_sale': {
           const existing = db.transactions.find((t) => t.idempotency_key === args.p_idempotency_key)
           if (existing) return { data: { ...saleResult(existing), replayed: true }, error: null }
@@ -248,6 +358,7 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
             cost_total: r.costTotal.toNumber(), gross_profit: r.grossProfit.toNumber(), idempotency_key: args.p_idempotency_key,
             cashier_id: current?.id, cashier_name: current?.full_name, voided_at: null, void_reason: null, voided_by_name: null,
             reference: args.p_payment_reference ?? null,
+            cash_session_id: db.cashSessions.find((x) => x.opened_by === current?.id && x.status === 'open')?.id ?? null,
             items: items.map((i, k) => ({
               id: `ti-${n}-${k}`, product_id: i.product_id, product_name: prods[k].name, sku: prods[k].sku, unit: prods[k].unit,
               quantity: Number(i.quantity), unit_price: Number(prods[k].sell_price), subtotal: r.lines[k].subtotal.toNumber(),
@@ -439,6 +550,20 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
             (r) => {
               const row = { id: `c-${db.categories.length + 1}`, sort_order: 0, is_active: true, ...r }
               db.categories.push(row)
+              return row
+            },
+            table,
+            calls.writes,
+          )
+        case 'expenses':
+          return new Query(
+            () => db.expenses,
+            null,
+            (r) => {
+              const p = perms(r.outlet_id)
+              if (!p.includes('expenses.manage')) throw new Error('new row violates row-level security policy')
+              const row = { id: `e-${db.expenses.length + 1}`, created_at: '2026-11-21T05:00:00Z', deleted_at: null, ...r }
+              db.expenses.push(row)
               return row
             },
             table,

@@ -81,9 +81,9 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ✅ Selesai |
 | 4 | Stok masuk/keluar/opname & riwayat pergerakan | ✅ Selesai |
 | 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ✅ Selesai |
-| 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ⏳ Berikutnya |
-| 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | – |
-| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet | – |
+| 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ✅ Selesai |
+| 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | ⏳ Berikutnya |
+| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | – |
 | 9 | E2E test, security audit, deployment | – |
 
 Setiap fase ditutup dengan: build, unit test, tes database, pemeriksaan console
@@ -261,6 +261,52 @@ tersimpan).
   Bluetooth di Android memerlukan aplikasi layanan cetak (mis. RawBT);
   cetak ESC/POS langsung belum termasuk.
 
+## Catatan Fase 6
+
+**Database** (`0700_reports_expenses`): `get_expenses` (daftar + total per
+kategori, nama pencatat, `can_manage`), `get_my_cash_session` (sesi kas
+terbuka dengan kas seharusnya dihitung langsung) dan `get_cash_sessions`
+(daftar sesi untuk closing). Laporan memakai `get_sales_report` (0300).
+Pengeluaran ditulis langsung ke tabel dengan RLS (`expenses.manage`),
+soft delete, dan audit otomatis.
+
+**Laporan** (`/laporan`, mengikuti screenshot referensi): Harian / 7 Hari /
+30 Hari / Bulanan / Rentang (tanggal WITA), cakupan outlet aktif atau semua
+outlet (owner), sakelar "Masukkan pengeluaran", kartu Transaksi / Penjualan /
+Laba, ringkasan (omzet, kas masuk tunai, rata-rata, diskon, terjual per
+satuan, HPP, laba kotor, pengeluaran, laba bersih), metode pembayaran,
+produk terlaris, produk laba terbesar, perbandingan outlet. Tanpa
+`profit.view`, HPP/laba tidak dikirim server maupun ditampilkan.
+Kasir dengan `closing.perform` hanya melihat kartu sesi kas.
+
+**Closing**: buka kas (kas awal) dari halaman Kasir atau Laporan; tutup kas
+dengan hitung kas fisik → selisih. "Cetak Laporan Closing" membuat PDF berisi
+ringkasan, metode bayar, produk, pengeluaran per kategori, dan sesi kas.
+
+**Export**: PDF (jsPDF + autotable, A4, header hitam-kuning, nomor halaman)
+dan Excel (.xlsx). Pustaka dimuat hanya saat tombol export ditekan. Teks PDF
+disanitasi untuk font standar (mis. "−" → "-").
+
+**Pengeluaran** (`/pengeluaran`): filter Harian/Bulanan/Rentang + kategori,
+total & per kategori, catat/ubah/hapus (soft delete dengan konfirmasi),
+mode hanya-baca untuk `expenses.view`, blokir saat offline.
+
+**Keamanan dependensi**: `npm audit --omit=dev` = 0 kerentanan. Dalam fase
+ini jspdf dinaikkan ke 4.2.1, zod 3 → 4.6.7 (memperbaiki kerentanan
+memory exhaustion; seluruh validasi tetap lulus uji), write-excel-file 4.1.1
+(tanpa dependensi archiver/glob).
+
+**Hasil uji Fase 6**
+
+- Tes database: **75 lulus** (6 baru).
+- Unit/komponen: **131 lulus** (24 baru), tanpa peringatan `act`.
+- Browser (tablet & ponsel, respons Supabase disimulasikan): Laporan,
+  Pengeluaran, PDF closing diunduh lalu dirender dengan pdftoppm (2 halaman,
+  semua tabel benar), Excel diunduh. Perbaikan dari pemeriksaan: halaman
+  Laporan meluap horizontal di ponsel (kolom grid & tab periode).
+- Catatan untuk Fase 8: bundle utama ~1 MB (gzip ~290 KB), terutama
+  react-dom, supabase-js, react-router, dan zod 4. Akan dipecah per halaman.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
@@ -279,10 +325,10 @@ tersimpan).
 | 12 | Pembayaran QRIS | ✅ DB + UI | 〃 |
 | 13 | Perhitungan kembalian | ✅ DB + unit + UI | 〃 |
 | 14 | Perhitungan HPP | ✅ DB + unit | 〃 |
-| 15 | Perhitungan laba | ✅ DB + unit | `tests/db/reports.test.ts` |
-| 16 | Closing harian | ✅ DB (sesi kas); cetak PDF di Fase 6 | `tests/db/reports.test.ts` |
-| 17 | Export PDF | ⏳ Fase 6 | – |
-| 18 | Export Excel | ⏳ Fase 6 | – |
+| 15 | Perhitungan laba | ✅ DB + unit + UI | `tests/db/reports.test.ts` |
+| 16 | Closing harian | ✅ DB (sesi kas) + UI (buka/tutup kas, PDF closing) | `tests/db/reports.test.ts` |
+| 17 | Export PDF | ✅ file PDF dibuat & diperiksa isinya; diunduh dari browser dan dirender ke gambar | `export.test.ts`, `reports-page.test.tsx` |
+| 18 | Export Excel | ✅ file .xlsx dibuat, dibuka ulang (zip) dan diperiksa isinya | `export.test.ts`, `reports-page.test.tsx` |
 | 19 | Pembatasan akses outlet | ✅ DB + UI | `tests/db/security.test.ts` |
 | 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI (coba lagi setelah respons hilang) | `tests/db/sales.test.ts` |
 | 21 | Internet terputus | ✅ indikator, tombol bayar nonaktif, tidak ada klaim sukses | `app-shell.test.tsx`, `pos-page.test.tsx` |
