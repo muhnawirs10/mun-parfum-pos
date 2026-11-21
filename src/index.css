@@ -1,0 +1,55 @@
+@import '@fontsource-variable/plus-jakarta-sans';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* #F5F5F3 */
+    --background: 60 9% 96%;
+    /* #171717 */
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    /* #F5C518 */
+    --primary: 48 92% 53%;
+    --primary-foreground: 0 0% 9%;
+    /* #171717 sebagai aksen gelap */
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 60 5% 94%;
+    --muted-foreground: 0 0% 42%;
+    /* #FFD84D */
+    --accent: 47 100% 65%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    /* #E8E8E8 */
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
+    --ring: 48 92% 53%;
+    --radius: 0.875rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
