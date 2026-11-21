@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { OutletAccess } from '@/features/auth/permissions'
 import { PERMISSIONS } from '@/features/auth/permissions'
 import { calcSale } from '@/lib/sale-calc'
+import { handle as handleAdminUsers } from '../../supabase/functions/admin-users/handler'
 
 export interface FakeUser {
   id: string
@@ -70,6 +71,9 @@ export interface FakeDb {
   settings: Row[]
   expenses: Row[]
   cashSessions: Row[]
+  staff: Row[]
+  outlets: Row[]
+  audit: Row[]
 }
 
 export function seedDb(): FakeDb {
@@ -118,6 +122,36 @@ export function seedDb(): FakeDb {
     settings: [],
     expenses: [],
     cashSessions: [],
+    outlets: [
+      { id: 'o-mks', code: 'MKS', name: 'MUN Parfum Makassar', address: null, phone: null, logo_url: null, is_active: true },
+      { id: 'o-tkl', code: 'TKL', name: 'MUN Parfum Takalar', address: 'Jl. Poros Takalar', phone: '0812-0000-0000', logo_url: null, is_active: true },
+    ],
+    staff: Object.values(USERS)
+      .filter((u) => u.id !== 'u-orphan')
+      .map((u) => ({
+        id: u.id,
+        full_name: u.full_name,
+        username: u.username ?? null,
+        is_owner: !!u.is_owner,
+        is_active: true,
+        created_at: '2026-11-01T00:00:00Z',
+        assignments: u.is_owner
+          ? []
+          : u.access.map((a) => ({
+              id: `ou-${u.id}-${a.outlet_id}`,
+              outlet_id: a.outlet_id,
+              outlet_code: a.outlet_code,
+              outlet_name: a.outlet_name,
+              role: a.role,
+              permissions: [],
+              revoked_permissions: [],
+              is_active: true,
+            })),
+      })),
+    audit: [
+      { id: 'a1', created_at: '2026-11-21T15:11:00Z', action: 'create', entity: 'transactions', entity_id: 't1', details: { number: 'MP-TKL-20261121-0001', total: 20000 }, user_name: 'Kasir Satu', outlet_code: 'TKL' },
+      { id: 'a2', created_at: '2026-11-21T09:00:00Z', action: 'update', entity: 'products', entity_id: 'p-1', details: { new: { name: 'VALENTINE / SCANDALOUS', sku: 'TKL-0001' } }, user_name: 'Nawir', outlet_code: 'TKL' },
+    ],
   }
 }
 
@@ -177,7 +211,7 @@ class Query implements PromiseLike<{ data: unknown; error: unknown }> {
         const created = this.onInsert(this.payload!)
         return { data: this.wantSingle ? created : [created], error: null }
       } catch (e) {
-        return { data: null, error: { code: '42501', message: (e as Error).message } }
+        return { data: null, error: { code: (e as { code?: string }).code ?? '42501', message: (e as Error).message } }
       }
     }
     if (this.mode === 'update') {
@@ -205,6 +239,9 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
     signOut: 0,
     rpc: [] as { fn: string; args: Record<string, unknown> }[],
     writes: [] as { table: string; op: string; payload: unknown }[],
+    functions: [] as { name: string; body: Record<string, unknown> }[],
+    adminUpdates: [] as { id: string; attrs: Record<string, unknown> }[],
+    authUpdates: [] as Record<string, unknown>[],
   }
   const perms = (outlet: unknown) => current?.access.find((a) => a.outlet_id === outlet)?.permissions ?? []
   let skuCounter = 100
@@ -240,8 +277,75 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
     }
   }
 
+  const DELEGABLE = ['closing.perform', 'transactions.view_all']
+  const canManageStaff = (outletId: string, role: string, permissions: string[]) => {
+    if (!current || role === 'owner') return false
+    if (current.is_owner) return true
+    return role === 'kasir' && perms(outletId).includes('users.manage') && permissions.every((p) => DELEGABLE.includes(p))
+  }
+  const canManageUser = (userId: string) => {
+    if (!current || userId === current.id) return false
+    const m = db.staff.find((x) => x.id === userId)
+    if (!m || m.is_owner) return false
+    if (current.is_owner) return true
+    const as = m.assignments as Row[]
+    return as.length > 0 && as.every((a) => a.role === 'kasir' && perms(a.outlet_id as string).includes('users.manage'))
+  }
+
   async function runRpc(fn: string, args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> {
       switch (fn) {
+        case 'list_staff': {
+          if (!current?.is_owner && !current?.access.some((a) => a.permissions.includes('users.manage')))
+            return { data: null, error: { code: '42501', message: 'Akses ditolak: izin users.manage diperlukan' } }
+          return { data: db.staff.map((m) => ({ ...m, is_self: m.id === current?.id, can_manage: canManageUser(m.id as string) })), error: null }
+        }
+        case 'can_manage_staff':
+          return { data: canManageStaff(args.p_outlet_id as string, args.p_role as string, (args.p_permissions as string[]) ?? []), error: null }
+        case 'can_manage_user':
+          return { data: canManageUser(args.p_user_id as string), error: null }
+        case 'assign_outlet_user': {
+          const m = db.staff.find((x) => x.id === args.p_user_id)
+          if (!m) return { data: null, error: { code: 'P0002', message: 'Pengguna tidak ditemukan' } }
+          if (!canManageStaff(args.p_outlet_id as string, args.p_role as string, (args.p_permissions as string[]) ?? []))
+            return { data: null, error: { code: '42501', message: 'Akses ditolak: tidak boleh menetapkan peran/izin ini' } }
+          const list = m.assignments as Row[]
+          const o = db.outlets.find((x) => x.id === args.p_outlet_id)!
+          const row = { id: `ou-${m.id}-${o.id}`, outlet_id: o.id, outlet_code: o.code, outlet_name: o.name, role: args.p_role, permissions: args.p_permissions, revoked_permissions: args.p_revoked, is_active: args.p_active }
+          const i = list.findIndex((a) => a.outlet_id === o.id)
+          if (i >= 0) list[i] = row
+          else list.push(row)
+          return { data: row.id, error: null }
+        }
+        case 'set_staff_active': {
+          if (!current?.is_owner) return { data: null, error: { code: '42501', message: 'Akses ditolak: hanya pemilik' } }
+          db.staff.find((x) => x.id === args.p_user_id)!.is_active = args.p_active
+          return { data: null, error: null }
+        }
+        case 'update_staff_name': {
+          const m = db.staff.find((x) => x.id === args.p_user_id)
+          if (m) m.full_name = args.p_full_name
+          if (current && args.p_user_id === current.id) current.full_name = String(args.p_full_name)
+          return { data: null, error: null }
+        }
+        case 'get_audit_logs':
+          return { data: { total: db.audit.length, items: db.audit }, error: null }
+        case 'get_settings':
+          return {
+            data: {
+              allow_negative_stock: db.settings.some((s) => s.key === 'allow_negative_stock' && s.value === true),
+              receipt_footer: (db.settings.find((s) => s.key === 'receipt_footer')?.value as string) ?? 'Terima kasih atas kunjungan Anda',
+              can_manage: perms(args.p_outlet_id).includes('settings.manage'),
+              can_manage_negative_stock: !!current?.is_owner,
+            },
+            error: null,
+          }
+        case 'set_setting': {
+          if (args.p_key === 'allow_negative_stock' && !current?.is_owner)
+            return { data: null, error: { code: '42501', message: 'Akses ditolak: hanya pemilik yang dapat mengizinkan stok minus' } }
+          db.settings = db.settings.filter((s) => s.key !== args.p_key)
+          db.settings.push({ outlet_id: args.p_outlet_id, key: args.p_key, value: args.p_value })
+          return { data: null, error: null }
+        }
         case 'get_sales_report': {
           const ok = perms(args.p_outlet_id ?? 'o-tkl').includes('reports.view')
           if (!ok) return { data: null, error: { code: '42501', message: 'Akses ditolak: izin reports.view diperlukan' } }
@@ -512,6 +616,10 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
         current = u
         return { data: { session: sessionOf(u) }, error: null }
       },
+      updateUser: async (attrs: Record<string, unknown>) => {
+        calls.authUpdates.push(attrs)
+        return { data: { user: current }, error: null }
+      },
       signOut: async () => {
         calls.signOut++
         current = null
@@ -569,6 +677,20 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
             table,
             calls.writes,
           )
+        case 'outlets':
+          return new Query(
+            () => db.outlets,
+            null,
+            (r) => {
+              if (!current?.is_owner) throw new Error('new row violates row-level security policy for table "outlets"')
+              if (db.outlets.some((o) => o.code === r.code)) throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' })
+              const row = { id: `o-${String(r.code).toLowerCase()}`, logo_url: null, is_active: true, ...r }
+              db.outlets.push(row)
+              return row
+            },
+            table,
+            calls.writes,
+          )
         case 'app_settings':
           return new Query(() => db.settings, null, noop, table, calls.writes)
         default:
@@ -584,6 +706,39 @@ export function createFakeSupabase(initialUser: FakeUser | null = null, db: Fake
         return { data: null, error: { message: 'TypeError: Failed to fetch' } }
       }
       return result
+    },
+    functions: {
+      /** Menjalankan handler Edge Function `admin-users` yang sebenarnya. */
+      invoke: async (name: string, { body }: { body: Record<string, unknown> }) => {
+        calls.functions.push({ name, body })
+        if (name !== 'admin-users') throw new Error('function tidak dikenal')
+        const result = await handleAdminUsers(body, {
+          getCaller: async () => (current ? { id: current.id } : null),
+          callerRpc: async (fn, args) => (await runRpc(fn, args)) as { data: unknown; error: { message: string; code?: string } | null },
+          admin: {
+            createUser: async (a) => {
+              const username = String(a.user_metadata.username)
+              if (db.staff.some((m) => m.username === username)) return { data: null, error: { message: 'A user with this email address has already been registered' } }
+              const id = `11111111-2222-4333-8444-${String(db.staff.length).padStart(12, '0')}`
+              db.staff.push({ id, full_name: a.user_metadata.full_name, username, is_owner: false, is_active: true, created_at: '2026-11-21T00:00:00Z', assignments: [] })
+              return { data: { user: { id } }, error: null }
+            },
+            deleteUser: async (id) => {
+              db.staff = db.staff.filter((m) => m.id !== id)
+              return { error: null }
+            },
+            updateUserById: async (id, attrs) => {
+              calls.adminUpdates.push({ id, attrs })
+              return { error: null }
+            },
+          },
+          staffDomain: 'staff.munparfum.local',
+        })
+        if (result.status !== 200) {
+          return { data: null, error: { message: 'Edge Function returned a non-2xx status code', context: new Response(JSON.stringify(result.body), { status: result.status }) } }
+        }
+        return { data: result.body, error: null }
+      },
     },
     storage: {
       from: () => ({

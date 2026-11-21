@@ -82,8 +82,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 4 | Stok masuk/keluar/opname & riwayat pergerakan | ✅ Selesai |
 | 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | ✅ Selesai |
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ✅ Selesai |
-| 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | ⏳ Berikutnya |
-| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | – |
+| 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | ✅ Selesai |
+| 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | ⏳ Berikutnya |
 | 9 | E2E test, security audit, deployment | – |
 
 Setiap fase ditutup dengan: build, unit test, tes database, pemeriksaan console
@@ -307,12 +307,50 @@ memory exhaustion; seluruh validasi tetap lulus uji), write-excel-file 4.1.1
 - Catatan untuk Fase 8: bundle utama ~1 MB (gzip ~290 KB), terutama
   react-dom, supabase-js, react-router, dan zod 4. Akan dipecah per halaman.
 
+## Catatan Fase 7
+
+**Database** (`0800_staff_outlets_settings`): `can_manage_staff`,
+`can_manage_user`, `assign_outlet_user`, `set_staff_active`,
+`update_staff_name`, `list_staff`, `get_audit_logs`, `get_settings`,
+`set_setting` (daftar kunci yang diizinkan; stok minus hanya owner; footer
+struk ≤ 200 karakter), trigger kode outlet terkunci setelah dipakai pada
+transaksi, penjaga profil diperbarui (admin boleh mengubah nama kasirnya,
+tidak boleh mengubah status/username).
+
+Aturan anti-eskalasi (diuji): admin tidak bisa memberi peran admin, izin di
+luar "closing kas"/"lihat semua transaksi", mengubah diri sendiri, mengubah
+admin lain/owner, atau mengelola outlet lain.
+
+**Edge Function** `supabase/functions/admin-users`: `create_staff`,
+`reset_password`, `set_active`. Logika di `handler.ts` (tanpa dependensi
+Deno, diuji 7 tes), `index.ts` hanya penghubung Deno. Otorisasi selalu lewat
+fungsi DB sebagai pemanggil; bila penugasan outlet gagal setelah akun Auth
+dibuat, akun dihapus kembali. Nonaktifkan akun = profil nonaktif (semua akses
+data hilang) + blokir login di Auth.
+
+**Frontend**: Karyawan (daftar, tambah via username, atur akses per outlet
+dengan centang izin efektif, reset sandi, nonaktifkan; tab Aktivitas berisi
+riwayat audit), Outlet (kartu per outlet: omzet & laba hari ini, stok
+menipis/habis, tambah/ubah, logo, pindah outlet aktif), Pengaturan (akun
+saya: nama & kata sandi; pesan struk; izin stok minus). Halaman sementara
+"sedang dibangun" dihapus — ke-10 halaman wajib sudah nyata.
+
+**Hasil uji Fase 7**
+
+- Tes database: **86 lulus** (11 baru).
+- Unit/komponen + Edge Function: **152 lulus** (21 baru). Tes UI memanggil
+  handler Edge Function yang sebenarnya lewat backend palsu.
+- Browser (tablet & ponsel): Karyawan, dialog Tambah, Outlet, Pengaturan —
+  0 error console, tanpa overflow.
+- **Belum diuji**: `index.ts` di runtime Deno/Supabase (Deno tidak tersedia di
+  lingkungan pengembangan). Wajib dicoba setelah `supabase functions deploy`.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
 |---|---|---|---|
 | 1 | Login & logout | ✅ UI (klien Supabase palsu) — perlu verifikasi di Supabase nyata | `src/features/auth/auth.test.tsx` |
-| 2 | Role pengguna | ✅ DB + UI | `tests/db/security.test.ts`, `auth.test.tsx` |
+| 2 | Role pengguna | ✅ DB + UI (termasuk aturan anti-eskalasi pengelolaan karyawan) | `tests/db/security.test.ts`, `auth.test.tsx` |
 | 3 | Tambah produk | ✅ DB + UI | `tests/db/products-stock.test.ts`, `products-page.test.tsx` |
 | 4 | Edit produk | ✅ DB + UI | 〃 |
 | 5 | Hapus/nonaktifkan produk | ✅ DB + UI | 〃 |
@@ -329,7 +367,7 @@ memory exhaustion; seluruh validasi tetap lulus uji), write-excel-file 4.1.1
 | 16 | Closing harian | ✅ DB (sesi kas) + UI (buka/tutup kas, PDF closing) | `tests/db/reports.test.ts` |
 | 17 | Export PDF | ✅ file PDF dibuat & diperiksa isinya; diunduh dari browser dan dirender ke gambar | `export.test.ts`, `reports-page.test.tsx` |
 | 18 | Export Excel | ✅ file .xlsx dibuat, dibuka ulang (zip) dan diperiksa isinya | `export.test.ts`, `reports-page.test.tsx` |
-| 19 | Pembatasan akses outlet | ✅ DB + UI | `tests/db/security.test.ts` |
+| 19 | Pembatasan akses outlet | ✅ DB + UI (termasuk outlet/penugasan nonaktif) | `tests/db/security.test.ts` |
 | 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI (coba lagi setelah respons hilang) | `tests/db/sales.test.ts` |
 | 21 | Internet terputus | ✅ indikator, tombol bayar nonaktif, tidak ada klaim sukses | `app-shell.test.tsx`, `pos-page.test.tsx` |
 | 22 | Instalasi PWA | ⏳ Fase 8 | – |

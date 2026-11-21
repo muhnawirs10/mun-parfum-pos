@@ -34,5 +34,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/stok', label: 'Stok', description: 'Stok masuk, keluar, dan riwayat pergerakan', icon: Boxes, group: 'operasional', permissions: ['stock.manage'] },
   { to: '/karyawan', label: 'Karyawan', description: 'Pengguna, peran, dan hak akses', icon: Users, group: 'manajemen', permissions: ['users.manage'] },
   { to: '/outlet', label: 'Outlet', description: 'Data outlet dan perbandingan kinerja', icon: Store, group: 'manajemen', permissions: ['settings.manage'] },
-  { to: '/pengaturan', label: 'Pengaturan', description: 'Struk, izin stok minus, dan preferensi', icon: Settings, group: 'manajemen', permissions: ['settings.manage'] },
+  { to: '/pengaturan', label: 'Pengaturan', description: 'Akun saya, struk, dan izin stok minus', icon: Settings, group: 'manajemen' },
 ]

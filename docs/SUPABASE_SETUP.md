@@ -47,14 +47,40 @@ select private.bootstrap_owner('email-pemilik@contoh.com', 'TKL', 'MUN Parfum Ta
 Fungsi ini menjadikan user tersebut owner dan membuat outlet pertama.
 `private.*` tidak dapat dipanggil dari aplikasi (hanya SQL Editor / service role).
 
-## 5. Buat akun karyawan (sementara, sebelum Fase 7)
+## 5. Deploy Edge Function `admin-users` (akun karyawan)
 
-Karyawan login memakai **username**. Username dipetakan ke email sintetis
-`<username>@staff.munparfum.local` (nilai `VITE_STAFF_EMAIL_DOMAIN`).
+Membuat akun karyawan butuh Supabase Auth Admin API (kunci `service_role`).
+Kunci itu **hanya** ada di server Edge Function, tidak pernah di aplikasi.
 
-1. Add user → Email `kasir1@staff.munparfum.local`, kata sandi, *Auto Confirm*,
-   metadata `{"full_name":"Kasir Satu","username":"kasir1"}`.
-2. Tugaskan ke outlet:
+```bash
+npx supabase functions deploy admin-users
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, dan `SUPABASE_SERVICE_ROLE_KEY` otomatis
+tersedia untuk Edge Function. Bila memakai domain email staf selain bawaan,
+set juga secret berikut (harus sama dengan `VITE_STAFF_EMAIL_DOMAIN`):
+
+```bash
+npx supabase secrets set STAFF_EMAIL_DOMAIN=staff.munparfum.local
+```
+
+Setelah itu, pemilik menambah karyawan dari menu **Karyawan → Tambah**
+(username + kata sandi awal + outlet + peran + hak akses). Karyawan login
+dengan username tersebut. Reset kata sandi dan nonaktifkan akun juga dari
+menu yang sama.
+
+Setiap aksi Edge Function diotorisasi oleh fungsi database **sebagai
+pengguna pemanggil** (`can_manage_staff`, `can_manage_user`,
+`assign_outlet_user`, `set_staff_active`):
+
+- Pemilik: mengelola admin & kasir di semua outlet.
+- Admin dengan izin "Mengelola kasir": hanya kasir di outletnya, hanya izin
+  tambahan "Closing kas" dan "Melihat semua transaksi outlet".
+
+**Alternatif manual** (tanpa Edge Function): buat user di Dashboard →
+Authentication dengan email `<username>@staff.munparfum.local` dan metadata
+`{"full_name":"Kasir Satu","username":"kasir1"}`, lalu tugaskan lewat menu
+Karyawan → Akses, atau SQL:
 
 ```sql
 insert into public.outlet_users (outlet_id, user_id, role)
@@ -63,23 +89,11 @@ from public.outlets o, auth.users u
 where o.code = 'TKL' and u.email = 'kasir1@staff.munparfum.local';
 ```
 
-Izin tambahan/pencabutan per orang: kolom `permissions` dan
-`revoked_permissions` (lihat tabel izin di `IMPLEMENTATION_PLAN.md`).
-Contoh memberi admin akses laporan laba:
-
-```sql
-update public.outlet_users set permissions = '{profit.view}'
-where user_id = (select id from auth.users where email = 'admin@staff.munparfum.local');
-```
-
 ## 6. Pengaturan bisnis
 
-Izinkan stok minus untuk satu outlet (default: tidak diizinkan):
-
-```sql
-insert into public.app_settings (outlet_id, key, value)
-select id, 'allow_negative_stock', 'true' from public.outlets where code = 'TKL';
-```
+Dari aplikasi: menu **Pengaturan** (pesan bawah struk; izin stok minus khusus
+pemilik) dan menu **Outlet** (tambah/ubah outlet, logo). Kode outlet tidak
+dapat diubah setelah dipakai pada nomor transaksi.
 
 ## 7. Data contoh (opsional)
 

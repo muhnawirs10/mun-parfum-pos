@@ -79,9 +79,11 @@ describe('Peran pengguna di UI', () => {
     renderRoute('/lainnya', USERS.kasir)
     expect(await screen.findByText('Kasir Satu')).toBeInTheDocument()
     expect(screen.getByText('Riwayat Transaksi')).toBeInTheDocument()
-    for (const hidden of ['Pengeluaran', 'Stok', 'Karyawan', 'Outlet', 'Pengaturan']) {
+    for (const hidden of ['Pengeluaran', 'Stok', 'Karyawan', 'Outlet']) {
       expect(screen.queryByText(hidden)).not.toBeInTheDocument()
     }
+    // Pengaturan terbuka untuk semua (akun sendiri: nama & kata sandi)
+    expect(screen.getByText('Pengaturan')).toBeInTheDocument()
     const r2 = renderRoute('/laporan', USERS.kasir)
     expect(await r2.findByText('Akses ditolak')).toBeInTheDocument()
   })
