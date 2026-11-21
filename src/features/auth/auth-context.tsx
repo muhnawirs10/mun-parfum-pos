@@ -14,6 +14,8 @@ export interface Profile {
 type Status = 'unconfigured' | 'loading' | 'signed_out' | 'signed_in'
 
 export interface AuthState {
+  /** Klien Supabase (null bila belum dikonfigurasi). */
+  client: SupabaseClient | null
   status: Status
   session: Session | null
   profile: Profile | null
@@ -144,6 +146,7 @@ export function AuthProvider({
 
   const value = useMemo<AuthState>(
     () => ({
+      client,
       status,
       session,
       profile,
@@ -160,7 +163,7 @@ export function AuthProvider({
       signOut,
       reload: () => loadAccount(session),
     }),
-    [status, session, profile, outlets, activeOutlet, loadError, signIn, signOut, loadAccount],
+    [client, status, session, profile, outlets, activeOutlet, loadError, signIn, signOut, loadAccount],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

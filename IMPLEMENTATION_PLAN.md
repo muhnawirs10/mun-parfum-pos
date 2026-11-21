@@ -78,8 +78,8 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 |---|---|---|
 | 1 | Audit repository, fondasi proyek, tema, layout, routing, utilitas desimal/format, unit test, dokumentasi | ✅ Selesai |
 | 2 | Migration database, Supabase Auth, RLS, peran & izin, RPC atomik, tes database | ✅ Selesai |
-| 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ⏳ Berikutnya |
-| 4 | Stok masuk/keluar/opname & riwayat pergerakan | – |
+| 3 | Dashboard (data nyata) & manajemen produk (CRUD, SKU otomatis, foto) | ✅ Selesai |
+| 4 | Stok masuk/keluar/opname & riwayat pergerakan | ⏳ Berikutnya |
 | 5 | Kasir, keranjang, diskon, pembayaran, kembalian, struk, riwayat & void | – |
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | – |
 | 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | – |
@@ -143,15 +143,53 @@ aktif), login dengan email atau username (Zod), logout, `RequireAuth`,
 lingkungan pengembangan ini): GoTrue (login nyata), PostgREST, dan Security
 Advisor. Wajib diverifikasi saat project Supabase dibuat.
 
+## Catatan Fase 3
+
+**Database** (`0400_dashboard_products`): RPC `get_dashboard` (ringkasan hari
+ini dalam satu panggilan, menyesuaikan izin: kasir hanya melihat transaksinya
+sendiri, laba hanya untuk `profit.view`, pengeluaran untuk `expenses.*`, stok
+menipis untuk pengelola produk/stok) dan bucket Storage `product-images`
+(publik, maks. 2 MB, JPG/PNG/WEBP) dengan policy unggah/hapus per outlet
+berdasarkan izin `products.manage`.
+
+**Frontend**:
+
+- Beranda: transaksi, omzet, laba kotor, pengeluaran hari ini; transaksi
+  terakhir (jam WITA, metode bayar, status batal); stok menipis; pintasan
+  sesuai izin; diperbarui otomatis tiap 60 detik.
+- Produk: daftar mirip referensi (foto, kategori, SKU, harga/satuan, HPP
+  hanya untuk `cost.view`, badge stok aman/menipis/habis), pencarian nama/SKU,
+  filter kategori & status; form tambah/edit dengan validasi Zod, input angka
+  format Indonesia ("2.000", "148,5"), SKU otomatis, unggah foto, stok awal
+  dicatat sebagai pergerakan (stok tidak dapat diedit dari form), nonaktifkan
+  (bukan hapus); kelola kategori.
+- Input angka: uang memakai titik ribuan & koma desimal; volume menerima
+  koma atau titik sebagai desimal (maks. 3 angka).
+
+**Hasil uji Fase 3**
+
+- Tes database: **59 lulus** (8 baru: dashboard per peran, kategori lintas
+  outlet, policy foto).
+- Unit/komponen: **74 lulus** (41 baru), tanpa peringatan `act`. Klien
+  Supabase palsu kini berupa backend kecil di memori sehingga fungsi API
+  sungguhan ikut teruji dari UI.
+- Browser (Chromium, respons Supabase disimulasikan lewat intersepsi
+  jaringan Playwright): Beranda, Produk, dan form di 1280×800 dan 390×844 —
+  0 error console, tanpa overflow horizontal. Perbaikan dari pemeriksaan
+  visual: field pertama yang salah kini difokuskan, tombol form menempel di
+  bawah, filter ponsel dibuat dua kolom.
+- Belum: uji terhadap PostgREST/Supabase sungguhan. Pemasangan PostgREST
+  lokal ditolak oleh pengaman otomatis lingkungan pengembangan.
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
 |---|---|---|---|
 | 1 | Login & logout | ✅ UI (klien Supabase palsu) — perlu verifikasi di Supabase nyata | `src/features/auth/auth.test.tsx` |
 | 2 | Role pengguna | ✅ DB + UI | `tests/db/security.test.ts`, `auth.test.tsx` |
-| 3 | Tambah produk | ✅ DB (UI di Fase 3) | `tests/db/products-stock.test.ts` |
-| 4 | Edit produk | ✅ DB | 〃 |
-| 5 | Hapus/nonaktifkan produk | ✅ DB | 〃 |
+| 3 | Tambah produk | ✅ DB + UI | `tests/db/products-stock.test.ts`, `products-page.test.tsx` |
+| 4 | Edit produk | ✅ DB + UI | 〃 |
+| 5 | Hapus/nonaktifkan produk | ✅ DB + UI | 〃 |
 | 6 | Stok masuk | ✅ DB | 〃 |
 | 7 | Stok keluar | ✅ DB | 〃 |
 | 8 | Penjualan 5 ml | ✅ DB + unit | `tests/db/sales.test.ts`, `sale-calc.test.ts` |

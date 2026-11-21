@@ -85,7 +85,14 @@ select id, 'allow_negative_stock', 'true' from public.outlets where code = 'TKL'
 
 Jalankan `supabase/seed-example.sql` di SQL Editor.
 
-## 8. Kunci API untuk frontend
+## 8. Foto produk (Storage)
+
+Migration `0400` otomatis membuat bucket **`product-images`** (publik,
+maks. 2 MB, JPG/PNG/WEBP) beserta policy: hanya pengguna dengan izin
+`products.manage` di outlet terkait yang dapat mengunggah/menghapus, dengan
+path `<outlet_id>/<uuid>.<ext>`. Periksa di Dashboard → Storage.
+
+## 9. Kunci API untuk frontend
 
 Project Settings → **API**: salin *Project URL* dan *anon public key* ke
 `.env.local`. **Jangan pernah** memakai `service_role` key di frontend.
