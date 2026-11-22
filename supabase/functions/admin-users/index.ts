@@ -5,16 +5,27 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handle } from './handler.ts'
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// Opsional: batasi asal (origin) yang boleh memanggil, mis.
+//   supabase secrets set ALLOWED_ORIGINS="https://pos.munparfum.id"
+// Tanpa secret ini semua origin diizinkan (aman karena setiap aksi tetap
+// memerlukan JWT pengguna dan diotorisasi database).
+const ALLOWED = (Deno.env.get('ALLOWED_ORIGINS') ?? '').split(/[\s,]+/).filter(Boolean)
+
+function corsFor(req: Request) {
+  const origin = req.headers.get('Origin') ?? ''
+  const allow = ALLOWED.length === 0 ? '*' : ALLOWED.includes(origin) ? origin : ALLOWED[0]
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
 }
 
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
-
 Deno.serve(async (req) => {
+  const cors = corsFor(req)
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Metode tidak diizinkan' })
 

@@ -25,7 +25,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'VITE_SUPABASE_URL=http://localhost:54400 VITE_SUPABASE_ANON_KEY=e2e-anon-key-0123456789abcdef npx vite build --outDir dist-e2e --emptyOutDir && npx vite preview --outDir dist-e2e --port 4174 --strictPort',
+      'VITE_SUPABASE_URL=http://localhost:54400 VITE_SUPABASE_ANON_KEY=e2e-anon-key-0123456789abcdef npx vite build --outDir dist-e2e --emptyOutDir && PREVIEW_CSP_CONNECT=http://localhost:54400 npx vite preview --outDir dist-e2e --port 4174 --strictPort',
     url: 'http://localhost:4174/masuk',
     timeout: 180_000,
     reuseExistingServer: false,

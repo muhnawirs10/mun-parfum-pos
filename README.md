@@ -11,7 +11,7 @@ Web App + PWA, cloud (Supabase/PostgreSQL), multi-outlet.
 - Bahasa Indonesia · Rupiah · zona waktu **WITA (Asia/Makassar)**.
 
 Status fase: lihat [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md).
-**Belum production-ready** — semua fitur terpasang dan teruji secara lokal; pengujian terhadap project Supabase sungguhan, E2E, dan audit keamanan (Fase 9) belum dilakukan.
+**Status: siap UAT, belum dinyatakan production-ready.** Semua fitur terpasang dan lulus pengujian otomatis (unit, database, E2E, PWA, audit keamanan). Sebelum dipakai berjualan, jalankan [`docs/UAT_CHECKLIST.md`](docs/UAT_CHECKLIST.md) pada project Supabase sungguhan dan perangkat fisik.
 
 ## Teknologi
 
@@ -34,7 +34,9 @@ src/
 supabase/migrations/    skema, keamanan/RLS, RPC
 supabase/functions/     Edge Function admin-users (akun karyawan)
 scripts/                ikon PWA, pemeriksaan PWA
-tests/db/               tes integrasi database (RLS, RPC, perhitungan)
+tests/db/               tes integrasi database (RLS, RPC, perhitungan, audit keamanan)
+tests/e2e/              E2E Playwright + server Supabase tiruan (khusus tes)
+.github/workflows/      CI
 docs/                   setup Supabase, deployment, PWA
 ```
 
@@ -74,6 +76,13 @@ di-stub oleh `tests/db/supabase-stub.sql`). Database `mun_pos_test` dibuat ulang
 DATABASE_URL=postgres://postgres@localhost:5432/postgres npm run test:db
 ```
 
+E2E Playwright (browser → build produksi → server Supabase tiruan → PostgreSQL
+dengan migration asli; membutuhkan `DATABASE_URL` seperti tes database):
+
+```bash
+npm run test:e2e
+```
+
 Pemeriksaan PWA di Chromium (setelah `npm run build` dan `npx vite preview --port 4173`):
 
 ```bash
@@ -92,4 +101,6 @@ npm run typecheck && npm run lint && npm run build
 - [Setup Supabase](docs/SUPABASE_SETUP.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Instalasi PWA](docs/PWA_INSTALL.md)
+- [Keamanan & hasil audit](docs/SECURITY.md)
+- [Checklist UAT sebelum produksi](docs/UAT_CHECKLIST.md)
 - Edge Function: `supabase/functions/admin-users`

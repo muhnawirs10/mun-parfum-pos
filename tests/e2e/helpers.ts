@@ -41,3 +41,12 @@ export async function selectOutlet(page: Page, code: string) {
   await page.getByRole('group', { name: 'Pilih outlet' }).getByRole('button', { name: code }).click()
   await expect(page.getByRole('button', { name: code })).toHaveAttribute('aria-pressed', 'true')
 }
+
+/** Kumpulkan pelanggaran Content-Security-Policy yang dilaporkan browser. */
+export function watchCsp(page: Page): string[] {
+  const violations: string[] = []
+  page.on('console', (m) => {
+    if (/Content Security Policy|Refused to (load|execute|apply|connect|create)/i.test(m.text())) violations.push(m.text())
+  })
+  return violations
+}

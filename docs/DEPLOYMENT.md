@@ -13,49 +13,44 @@ npm run test:all
 ```
 
 ```bash
+npm run test:e2e
+```
+
+```bash
 npm run build
 ```
 
 ## Hosting (pilih salah satu)
 
-**Vercel**: import repository → Framework *Vite* → isi environment variable
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STAFF_EMAIL_DOMAIN`.
-Tambahkan `vercel.json` berisi rewrite SPA:
+**Vercel** (disarankan): import repository → Framework *Vite* → isi
+environment variable `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+`VITE_STAFF_EMAIL_DOMAIN`. `vercel.json` sudah tersedia.
 
-```json
-{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
-```
-
-**Netlify**: build command `npm run build`, publish directory `dist`,
-dan file `public/_redirects` berisi `/* /index.html 200`.
+**Netlify**: build command `npm run build`, publish directory `dist`
+(`_redirects` & `_headers` sudah ada di `public/`).
 
 **Cloudflare Pages**: build `npm run build`, output `dist`. SPA fallback otomatis.
 
-## Header cache untuk PWA
+## Header keamanan & cache (sudah disiapkan)
 
-Agar pembaruan aplikasi terdeteksi, `sw.js`, `index.html`, dan
-`manifest.webmanifest` **tidak boleh** di-cache lama oleh hosting/CDN.
-File di `assets/` aman di-cache permanen (nama berisi hash).
+`vercel.json` (Vercel) dan `public/_headers` + `public/_redirects` (Netlify /
+Cloudflare Pages) **dihasilkan** dari `scripts/security-headers.cjs`
+(`npm run headers`; tes unit memastikan selalu sinkron). Isinya:
 
-Vercel (`vercel.json`):
+- Content-Security-Policy ketat (script hanya dari domain sendiri, koneksi
+  hanya ke `*.supabase.co`), `X-Frame-Options: DENY`, `nosniff`,
+  `Referrer-Policy`, `Permissions-Policy`, COOP.
+- `sw.js`, `index.html`, `manifest.webmanifest`: `no-cache` (pembaruan PWA
+  terdeteksi); `assets/*`: cache 1 tahun (nama ber-hash).
+- SPA fallback ke `index.html`.
 
-```json
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
-  "headers": [
-    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
-    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
-  ]
-}
-```
+Bila memakai domain Supabase kustom (bukan `*.supabase.co`), tambahkan ke
+`connect-src`/`img-src` di `scripts/security-headers.cjs`, lalu `npm run headers`.
 
-Netlify (`public/_headers`):
+Periksa setelah deploy:
 
-```
-/sw.js
-  Cache-Control: no-cache
-/assets/*
-  Cache-Control: public, max-age=31536000, immutable
+```bash
+curl -I https://domain-anda
 ```
 
 ## Wajib HTTPS
@@ -68,6 +63,7 @@ atas menyediakan HTTPS otomatis.
 - [ ] Migration terbaru sudah di-push ke project Supabase produksi.
 - [ ] Sign-up publik dimatikan.
 - [ ] Hanya anon key di environment frontend.
-- [ ] `npm run test:all` lulus.
+- [ ] CI GitHub Actions hijau (lint, typecheck, unit, database, E2E, PWA, rahasia bundle).
+- [ ] `docs/UAT_CHECKLIST.md` dijalankan bersama pemilik.
 - [ ] Supabase *Security Advisor* ditinjau.
 - [ ] Backup database harian aktif (Supabase Pro / pg_dump terjadwal).

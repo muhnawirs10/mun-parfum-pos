@@ -32,6 +32,8 @@ Dashboard → **Authentication → Sign In / Providers**:
 - **Email**: aktif.
 - **Allow new users to sign up**: **MATIKAN**. Akun hanya dibuat oleh pemilik.
 - **Confirm email**: boleh dimatikan untuk akun karyawan (email sintetis).
+- **Password**: panjang minimal 8; aktifkan *leaked password protection*.
+- Pertimbangkan **MFA** untuk akun pemilik.
 
 ## 4. Buat akun pemilik (owner)
 
@@ -62,6 +64,12 @@ set juga secret berikut (harus sama dengan `VITE_STAFF_EMAIL_DOMAIN`):
 
 ```bash
 npx supabase secrets set STAFF_EMAIL_DOMAIN=staff.munparfum.local
+```
+
+Batasi asal pemanggil ke domain aplikasi (disarankan di produksi):
+
+```bash
+npx supabase secrets set ALLOWED_ORIGINS=https://pos.domain-anda.id
 ```
 
 Setelah itu, pemilik menambah karyawan dari menu **Karyawan → Tambah**

@@ -93,3 +93,19 @@ describe('file export', () => {
     expect(all).toContain('Rp13.800')
   })
 })
+
+describe('keamanan export Excel', () => {
+  it('nama produk berawalan "=" disimpan sebagai teks, bukan formula (anti formula-injection)', async () => {
+    const { default: writeExcelFile } = await import('write-excel-file/node')
+    const evil = '=HYPERLINK("http://evil.example","klik")'
+    const r = { ...REPORT, top_products: [{ ...REPORT.top_products[0], name: evil }], top_profit_products: null }
+    const rows = excelRows(META, r, reportTables(r)).map((row) => row.map((v) => (v === null ? null : { value: v })))
+    const files = unzipSync(new Uint8Array(await writeExcelFile(rows).toBuffer()))
+    const sheet = strFromU8(files['xl/worksheets/sheet1.xml'])
+    expect(sheet).not.toMatch(/<f>/) // tidak ada sel formula
+    const all = Object.values(files).map((f) => strFromU8(f)).join('\n')
+    expect(all).toMatch(/=HYPERLINK\((&quot;|")http:\/\/evil\.example/) // tersimpan sebagai teks biasa
+    // setiap sel bernilai teks bertipe string (shared/inline string), bukan formula
+    expect(sheet).not.toMatch(/t="e"|<f\b/)
+  })
+})

@@ -8,6 +8,13 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 
+// jsdom tidak menyediakan pointer capture (dipakai Radix Switch/Dialog)
+if (typeof Element !== 'undefined') {
+  Element.prototype.setPointerCapture ??= () => {}
+  Element.prototype.releasePointerCapture ??= () => {}
+  Element.prototype.hasPointerCapture ??= () => false
+}
+
 // Halaman dimuat lazy (code splitting); impor pertama di jsdom bisa > 1 detik.
 import { configure } from '@testing-library/react'
 configure({ asyncUtilTimeout: 5000 })

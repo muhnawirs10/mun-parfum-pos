@@ -84,7 +84,7 @@ Peran: `owner` (global, semua outlet), `admin` dan `kasir` (per outlet lewat
 | 6 | Laporan keuangan, closing harian, pengeluaran, export PDF & Excel | ✅ Selesai |
 | 7 | Multi-outlet, manajemen karyawan (Edge Function), pengaturan | ✅ Selesai |
 | 8 | PWA (manifest, service worker, ikon, install prompt), optimasi tablet & ukuran bundle | ✅ Selesai |
-| 9 | E2E test, security audit, deployment | ⏳ Berikutnya |
+| 9 | E2E test, security audit, deployment | ✅ Selesai (menunggu UAT di Supabase sungguhan) |
 
 Setiap fase ditutup dengan: build, unit test, tes database, pemeriksaan console
 browser, perbaikan bug, dan laporan.
@@ -380,11 +380,48 @@ tidak memotong transaksi).
   dan sesi CDP yang mengganggu emulasi offline Playwright), bukan aplikasi.
 - **Belum**: pemasangan di perangkat Android/iPad fisik dan Lighthouse.
 
+## Catatan Fase 9
+
+**E2E** (`tests/e2e`, Playwright 1.63): browser sungguhan → build produksi →
+server Supabase **tiruan khusus tes** (`tests/e2e/shim`: Auth, PostgREST, Edge
+Function `admin-users` dengan handler asli) → PostgreSQL dengan migration asli,
+setiap permintaan dijalankan sebagai `authenticated` + klaim JWT (RLS & RPC
+asli). 19 skenario, stabil 3×: perjalanan pemilik (produk 307 ml, stok
+masuk/keluar, jual 10 ml tunai & 5 ml QRIS, respons hilang setelah COMMIT →
+coba lagi = 1 transaksi, offline, void, pengeluaran, laporan, PDF/Excel,
+karyawan, audit), kasir baru (login username, sesi kas & closing, serangan
+API langsung ditolak), isolasi outlet, dan **0 pelanggaran CSP**.
+
+Temuan dari E2E: dialog Tambah Karyawan memakai outlet pertama, bukan outlet
+aktif (diperbaiki); Chromium otomatis mengulang POST yang terputus — aman
+karena idempotency key.
+
+**Audit keamanan**: lihat `docs/SECURITY.md`. Audit katalog otomatis (10 tes),
+migration `0900_hardening` (hak eksekusi fungsi private, default privileges,
+constraint URL http(s)), CSP & header keamanan dari satu sumber
+(`scripts/security-headers.cjs` → `vercel.json`, `public/_headers`),
+`check:secrets` untuk bundle, uji formula-injection Excel, CORS opsional Edge
+Function, Vitest 3 → 4.1.12 (menutup tinypool kritis). `npm audit --omit=dev`:
+0; dev: 4 sedang di alat build PWA.
+
+**Deployment**: CI GitHub Actions (lint, typecheck, unit, build, rahasia
+bundle, audit produksi, tes database dengan PostgreSQL 16, E2E, PWA),
+`vercel.json`/`_headers`/`_redirects`, panduan diperbarui,
+`docs/UAT_CHECKLIST.md`.
+
+**Hasil akhir**: unit/komponen/Edge Function **161**, database **96**, E2E
+**19**, PWA **15/15** — semua lulus; typecheck & lint 0 error; build sukses.
+
+**Status: siap UAT, belum production-ready.** Belum diuji: project Supabase
+sungguhan (GoTrue, PostgREST, Storage, runtime Edge Function), perangkat
+Android/iPad fisik, printer thermal, Lighthouse, dan CI di GitHub (berjalan
+setelah push).
+
 ## Status 22 pengujian wajib
 
 | # | Pengujian | Status | Lokasi |
 |---|---|---|---|
-| 1 | Login & logout | ✅ UI (klien Supabase palsu) — perlu verifikasi di Supabase nyata | `src/features/auth/auth.test.tsx` |
+| 1 | Login & logout | ✅ UI + E2E (email & username, server tiruan + DB asli) — perlu verifikasi di Supabase nyata | `auth.test.tsx`, `tests/e2e/*` |
 | 2 | Role pengguna | ✅ DB + UI (termasuk aturan anti-eskalasi pengelolaan karyawan) | `tests/db/security.test.ts`, `auth.test.tsx` |
 | 3 | Tambah produk | ✅ DB + UI | `tests/db/products-stock.test.ts`, `products-page.test.tsx` |
 | 4 | Edit produk | ✅ DB + UI | 〃 |
@@ -403,6 +440,6 @@ tidak memotong transaksi).
 | 17 | Export PDF | ✅ file PDF dibuat & diperiksa isinya; diunduh dari browser dan dirender ke gambar | `export.test.ts`, `reports-page.test.tsx` |
 | 18 | Export Excel | ✅ file .xlsx dibuat, dibuka ulang (zip) dan diperiksa isinya | `export.test.ts`, `reports-page.test.tsx` |
 | 19 | Pembatasan akses outlet | ✅ DB + UI (termasuk outlet/penugasan nonaktif) | `tests/db/security.test.ts` |
-| 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI (coba lagi setelah respons hilang) | `tests/db/sales.test.ts` |
+| 20 | Pencegahan transaksi ganda | ✅ DB (10 permintaan paralel) + UI + E2E (respons hilang setelah COMMIT, juga retry otomatis Chromium) | `tests/db/sales.test.ts` |
 | 21 | Internet terputus | ✅ indikator di semua layar, tombol bayar nonaktif, tidak ada klaim sukses, banner "Koneksi pulih" + Coba lagi; diuji juga di Chromium (offline sungguhan) | `pwa.test.tsx`, `pos-page.test.tsx`, `scripts/check-pwa.cjs` |
 | 22 | Instalasi PWA | ✅ Chromium menyatakan dapat diinstal (CDP `getInstallabilityErrors` kosong); manifest, ikon, SW, offline shell; tombol instal & petunjuk iOS diuji. Pemasangan di perangkat Android/iPad fisik belum | `scripts/check-pwa.cjs`, `pwa.test.tsx` |

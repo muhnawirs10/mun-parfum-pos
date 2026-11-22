@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { SHIM_PORT, USERS } from './config'
-import { login, logout, sql } from './helpers'
+import { login, logout, sql, watchCsp } from './helpers'
 
 /** Ambil access token sesi Supabase dari localStorage halaman. */
 async function tokenOf(page: Page): Promise<string> {
@@ -21,11 +21,16 @@ async function api(token: string, path: string, init: RequestInit = {}) {
 
 test.describe.serial('Kasir baru (dibuat lewat UI di tes 01)', () => {
   let page: Page
+  let csp: string[] = []
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage()
+    csp = watchCsp(page)
     await login(page, USERS.kasirBaru.login, USERS.kasirBaru.password)
   })
-  test.afterAll(async () => page.close())
+  test.afterAll(async () => {
+    expect(csp, 'pelanggaran CSP').toEqual([])
+    await page.close()
+  })
 
   test('login dengan username; menu manajemen tersembunyi; HPP tidak tampil', async () => {
     await expect(page.getByText(`${USERS.kasirBaru.name}!`)).toBeVisible()

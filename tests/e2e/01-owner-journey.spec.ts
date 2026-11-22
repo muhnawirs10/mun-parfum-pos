@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { USERS } from './config'
-import { login, selectOutlet, sql, todayWita } from './helpers'
+import { login, selectOutlet, sql, todayWita, watchCsp } from './helpers'
 
 /**
  * Perjalanan pemilik toko dari awal sampai akhir. Berjalan berurutan pada satu
@@ -9,9 +9,11 @@ import { login, selectOutlet, sql, todayWita } from './helpers'
  */
 test.describe.serial('Perjalanan pemilik: produk → stok → kasir → laporan → karyawan', () => {
   let page: import('@playwright/test').Page
+  let csp: string[] = []
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage()
+    csp = watchCsp(page)
     await login(page, USERS.owner.login, USERS.owner.password)
     await selectOutlet(page, 'TKL') // default: outlet pertama menurut kode (MKS)
   })
@@ -228,5 +230,12 @@ test.describe.serial('Perjalanan pemilik: produk → stok → kasir → laporan 
     expect(has('transactions', 'void')).toBe(true)
     expect(has('expenses', 'insert')).toBe(true)
     expect(has('outlet_users', 'insert')).toBe(true)
+  })
+
+  test('12. tidak ada pelanggaran Content-Security-Policy sepanjang perjalanan', async () => {
+    const res = await page.request.get('/')
+    expect(res.headers()['content-security-policy']).toContain("script-src 'self'")
+    expect(res.headers()['x-frame-options']).toBe('DENY')
+    expect(csp).toEqual([])
   })
 })
