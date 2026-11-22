@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "check:secrets": "node scripts/check-bundle-secrets.cjs",
     "headers": "node scripts/security-headers.cjs",
-    "setup-files": "node scripts/build-setup-files.cjs"
+    "setup-files": "node scripts/build-setup-files.cjs",
+    "smoke:supabase": "node scripts/smoke-supabase.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

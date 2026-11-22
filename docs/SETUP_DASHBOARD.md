@@ -78,6 +78,18 @@ VITE_SUPABASE_URL=https://<ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon/publishable key>
 ```
 
+## 7b. Uji asap otomatis (opsional, dari komputer pengembang)
+
+Memeriksa project sungguhan hanya dengan kunci publik (tidak mengubah data):
+
+```bash
+SUPABASE_URL=https://<ref>.supabase.co SUPABASE_PUBLISHABLE_KEY=sb_publishable_... npm run smoke:supabase
+```
+
+13 pemeriksaan: tamu tanpa login tidak bisa membaca tabel/memanggil fungsi,
+Auth aktif, pendaftaran publik dimatikan, Edge Function `admin-users`
+ter-deploy dan menolak tanpa login, bucket foto ada.
+
 ## 8. Opsional
 
 - Data contoh 7 parfum: jalankan [`supabase/seed-example.sql`](../supabase/seed-example.sql).

@@ -6,11 +6,12 @@ project Supabase sungguhan dan perangkat fisik. Centang bersama pemilik.
 
 ## A. Supabase sungguhan
 
-- [ ] `npx supabase db push` — semua migration 0100–0900 berhasil
+- [x] Database terpasang (`setup.sql`) — `verify.sql` 8/8 ✅ (22 Nov 2026)
 - [ ] Security Advisor ditinjau (3 view security definer memang disengaja)
-- [ ] Sign-up publik dimatikan; panjang sandi minimal 8
-- [ ] `private.bootstrap_owner(...)` → owner bisa login dengan email
-- [ ] `npx supabase functions deploy admin-users` berhasil
+- [x] Sign-up publik dimatikan; panjang sandi minimal 8 (diuji `smoke:supabase`)
+- [x] `private.bootstrap_owner(...)` — pemilik Nawir (nawir08) & outlet TKL dibuat
+- [ ] Pemilik berhasil login dengan email di aplikasi yang sudah di-deploy
+- [x] Edge Function `admin-users` ter-deploy (Dashboard) dan menolak tanpa login (diuji `smoke:supabase`)
 - [ ] Tambah kasir dari menu Karyawan → kasir login dengan **username**
 - [ ] Reset sandi & nonaktifkan akun → kasir tidak bisa login
 - [ ] Unggah foto produk (bucket `product-images`) tampil di kasir
