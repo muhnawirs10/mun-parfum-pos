@@ -98,7 +98,8 @@ npm run typecheck && npm run lint && npm run build
 ## Dokumentasi
 
 - [Rencana implementasi & aturan perhitungan](IMPLEMENTATION_PLAN.md)
-- [Setup Supabase](docs/SUPABASE_SETUP.md)
+- [Setup Supabase lewat Dashboard (disarankan)](docs/SETUP_DASHBOARD.md)
+- [Setup Supabase lewat CLI](docs/SUPABASE_SETUP.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Instalasi PWA](docs/PWA_INSTALL.md)
 - [Keamanan & hasil audit](docs/SECURITY.md)

@@ -1,4 +1,6 @@
-# Setup Supabase
+# Setup Supabase (CLI)
+
+> Lebih mudah tanpa CLI? Ikuti **[SETUP_DASHBOARD.md](SETUP_DASHBOARD.md)** (tempel `setup.sql` di SQL Editor).
 
 ## 1. Buat project
 
