@@ -29,3 +29,8 @@ dist-ssr
 .env.*.local
 coverage
 backup/
+
+# e2e
+dist-e2e
+test-results
+playwright-report

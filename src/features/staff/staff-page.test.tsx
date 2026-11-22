@@ -43,6 +43,8 @@ describe('Halaman Karyawan', () => {
     const { fake, db } = await open()
     await user.click(screen.getByRole('button', { name: /Tambah/ }))
     const dialog = await screen.findByRole('dialog', { name: 'Tambah Karyawan' })
+    // outlet default = outlet yang sedang dibuka (TKL), bukan outlet pertama menurut kode (MKS)
+    expect(within(dialog).getByLabelText('Outlet')).toHaveValue('o-tkl')
     await user.type(within(dialog).getByLabelText('Nama lengkap'), 'Kasir Dua')
     await user.type(within(dialog).getByLabelText('Username'), 'kasir1')
     await user.click(within(dialog).getByRole('checkbox', { name: 'Closing kas' }))

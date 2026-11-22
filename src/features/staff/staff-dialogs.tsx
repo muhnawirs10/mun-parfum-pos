@@ -20,7 +20,7 @@ function useEditable() {
 }
 
 export function CreateStaffDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { profile } = useAuth()
+  const { profile, activeOutlet } = useAuth()
   const online = useOnlineStatus()
   const outlets = useManageableOutlets()
   const editable = useEditable()
@@ -32,7 +32,9 @@ export function CreateStaffDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   useEffect(() => {
     if (open) {
-      setV({ full_name: '', username: '', password: generatePassword(), outlet_id: outlets[0]?.outlet_id ?? '', role: 'kasir' })
+      // default: outlet yang sedang dibuka (bila boleh dikelola), bukan outlet pertama
+      const defaultOutlet = outlets.find((o) => o.outlet_id === activeOutlet?.outlet_id) ?? outlets[0]
+      setV({ full_name: '', username: '', password: generatePassword(), outlet_id: defaultOutlet?.outlet_id ?? '', role: 'kasir' })
       setPerms(ROLE_DEFAULTS.kasir)
       setError(undefined)
     }

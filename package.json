@@ -14,7 +14,8 @@
     "test:db": "vitest run -c vitest.db.config.ts",
     "test:all": "vitest run && vitest run -c vitest.db.config.ts",
     "check:pwa": "node scripts/check-pwa.cjs http://localhost:4173",
-    "icons": "node scripts/generate-icons.cjs"
+    "icons": "node scripts/generate-icons.cjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
@@ -43,6 +44,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.13",
