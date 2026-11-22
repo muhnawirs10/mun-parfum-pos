@@ -36,7 +36,7 @@ function standaloneFunction() {
   const handler = fs.readFileSync(path.join(fnDir, 'handler.ts'), 'utf8')
   const index = fs
     .readFileSync(path.join(fnDir, 'index.ts'), 'utf8')
-    .replace(/^import \{ handle \} from '\.\/handler\.ts'\n/m, '')
+    .replace(/^import \{ handle(, pickKey)? \} from '\.\/handler\.ts'\n/m, '')
     .replace(/^import \{ createClient \} from 'npm:@supabase\/supabase-js@2'\n/m, '')
   return [
     '// =====================================================================',

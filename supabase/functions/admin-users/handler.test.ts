@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { handle, type Deps } from './handler'
+import { handle, pickKey, type Deps } from './handler'
 
 const OUTLET = '11111111-1111-4111-8111-111111111111'
 const USER = '22222222-2222-4222-8222-222222222222'
@@ -94,5 +94,21 @@ describe('admin-users: reset_password & set_active', () => {
     // set_staff_active memakai pemeriksaan DB; simulasikan penolakan
     denied.d.callerRpc = async () => ({ data: null, error: { message: 'Akses ditolak: hanya pemilik', code: '42501' } })
     expect(await handle({ action: 'set_active', user_id: USER, active: false }, denied.d)).toEqual({ status: 403, body: { ok: false, error: 'Akses ditolak: hanya pemilik' } })
+  })
+})
+
+describe('pickKey (kunci lama & baru)', () => {
+  const env = (m: Record<string, string>) => (n: string) => m[n]
+  it('memakai kunci lama bila ada', () => {
+    expect(pickKey(env({ SUPABASE_ANON_KEY: 'eyJlama', SUPABASE_PUBLISHABLE_KEYS: '{"default":"sb_publishable_x"}' }), 'SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEYS')).toBe('eyJlama')
+  })
+  it('kunci baru: JSON objek, array, atau teks', () => {
+    expect(pickKey(env({ SUPABASE_SECRET_KEYS: '{"default":"sb_secret_a"}' }), 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')).toBe('sb_secret_a')
+    expect(pickKey(env({ SUPABASE_SECRET_KEYS: '{"lain":"sb_secret_b"}' }), 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')).toBe('sb_secret_b')
+    expect(pickKey(env({ SUPABASE_SECRET_KEYS: '["sb_secret_c"]' }), 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')).toBe('sb_secret_c')
+    expect(pickKey(env({ SUPABASE_SECRET_KEYS: 'sb_secret_d' }), 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')).toBe('sb_secret_d')
+  })
+  it('tidak ada kunci → null', () => {
+    expect(pickKey(env({}), 'A', 'B')).toBeNull()
   })
 })

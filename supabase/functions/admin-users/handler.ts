@@ -68,6 +68,31 @@ function rpcError(e: { message: string; code?: string }): Result {
   return fail(e.code === '42501' ? 403 : 400, e.message)
 }
 
+/**
+ * Ambil kunci API dari environment Edge Function. Mendukung kunci lama
+ * (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) dan sistem kunci baru
+ * (SUPABASE_PUBLISHABLE_KEYS / SUPABASE_SECRET_KEYS: JSON objek/array atau teks).
+ */
+export function pickKey(env: (name: string) => string | undefined, legacy: string, modern: string): string | null {
+  const direct = env(legacy)?.trim()
+  if (direct) return direct
+  const raw = env(modern)?.trim()
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed === 'string') return parsed
+    if (Array.isArray(parsed)) return (parsed.find((v) => typeof v === 'string') as string | undefined) ?? null
+    if (parsed && typeof parsed === 'object') {
+      const o = parsed as Record<string, unknown>
+      const v = o.default ?? Object.values(o).find((x) => typeof x === 'string')
+      return typeof v === 'string' ? v : null
+    }
+  } catch {
+    return raw
+  }
+  return null
+}
+
 export async function handle(input: unknown, deps: Deps): Promise<Result> {
   const caller = await deps.getCaller()
   if (!caller) return fail(401, 'Sesi login tidak valid. Silakan masuk kembali.')

@@ -74,6 +74,31 @@ function rpcError(e: { message: string; code?: string }): Result {
   return fail(e.code === '42501' ? 403 : 400, e.message)
 }
 
+/**
+ * Ambil kunci API dari environment Edge Function. Mendukung kunci lama
+ * (SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY) dan sistem kunci baru
+ * (SUPABASE_PUBLISHABLE_KEYS / SUPABASE_SECRET_KEYS: JSON objek/array atau teks).
+ */
+export function pickKey(env: (name: string) => string | undefined, legacy: string, modern: string): string | null {
+  const direct = env(legacy)?.trim()
+  if (direct) return direct
+  const raw = env(modern)?.trim()
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed === 'string') return parsed
+    if (Array.isArray(parsed)) return (parsed.find((v) => typeof v === 'string') as string | undefined) ?? null
+    if (parsed && typeof parsed === 'object') {
+      const o = parsed as Record<string, unknown>
+      const v = o.default ?? Object.values(o).find((x) => typeof x === 'string')
+      return typeof v === 'string' ? v : null
+    }
+  } catch {
+    return raw
+  }
+  return null
+}
+
 export async function handle(input: unknown, deps: Deps): Promise<Result> {
   const caller = await deps.getCaller()
   if (!caller) return fail(401, 'Sesi login tidak valid. Silakan masuk kembali.')
@@ -193,9 +218,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Metode tidak diizinkan' })
 
-  const url = Deno.env.get('SUPABASE_URL')!
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const env = (n: string) => Deno.env.get(n)
+  const url = env('SUPABASE_URL')!
+  const anonKey = pickKey(env, 'SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEYS')
+  const serviceKey = pickKey(env, 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')
+  if (!url || !anonKey || !serviceKey) {
+    return json(500, { ok: false, error: 'Konfigurasi kunci Supabase di Edge Function tidak ditemukan' })
+  }
   const authorization = req.headers.get('Authorization') ?? ''
 
   const asCaller = createClient(url, anonKey, {

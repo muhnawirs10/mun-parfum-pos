@@ -3,7 +3,7 @@
 // Secret yang dibutuhkan (otomatis tersedia di Supabase): SUPABASE_URL,
 // SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY. Opsional: STAFF_EMAIL_DOMAIN.
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { handle } from './handler.ts'
+import { handle, pickKey } from './handler.ts'
 
 // Opsional: batasi asal (origin) yang boleh memanggil, mis.
 //   supabase secrets set ALLOWED_ORIGINS="https://pos.munparfum.id"
@@ -29,9 +29,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json(405, { ok: false, error: 'Metode tidak diizinkan' })
 
-  const url = Deno.env.get('SUPABASE_URL')!
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const env = (n: string) => Deno.env.get(n)
+  const url = env('SUPABASE_URL')!
+  const anonKey = pickKey(env, 'SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEYS')
+  const serviceKey = pickKey(env, 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS')
+  if (!url || !anonKey || !serviceKey) {
+    return json(500, { ok: false, error: 'Konfigurasi kunci Supabase di Edge Function tidak ditemukan' })
+  }
   const authorization = req.headers.get('Authorization') ?? ''
 
   const asCaller = createClient(url, anonKey, {
