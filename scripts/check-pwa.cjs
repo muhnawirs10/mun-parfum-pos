@@ -11,7 +11,8 @@ const results = []
 const check = (name, ok, info = '') => results.push({ name, ok: !!ok, info })
 
 ;(async () => {
-  const browser = await chromium.launch()
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy
+  const browser = await chromium.launch(proxy ? { proxy: { server: proxy } } : {})
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const page = await ctx.newPage()
   const consoleErrors = []
@@ -39,6 +40,10 @@ const check = (name, ok, info = '') => results.push({ name, ok: !!ok, info })
   )
 
   // 2. Service worker
+  // di jaringan sungguhan, precache bisa butuh beberapa detik sebelum SW 'activated'
+  await page
+    .waitForFunction(async () => (await navigator.serviceWorker.ready).active?.state === 'activated', null, { timeout: 30000 })
+    .catch(() => {})
   const swState = await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready
     return reg.active ? reg.active.state : null
