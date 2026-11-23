@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'users.manage',
   'settings.manage',
   'audit.view',
+  'attendance.manage',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
@@ -63,6 +64,7 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   'users.manage': 'Mengelola kasir',
   'settings.manage': 'Mengubah pengaturan outlet',
   'audit.view': 'Melihat riwayat audit',
+  'attendance.manage': 'Mengelola absensi (rekap, izin, HP, lokasi)',
 }
 
 /**

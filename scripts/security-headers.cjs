@@ -7,14 +7,15 @@
 const fs = require('fs')
 const path = require('path')
 
-/** @param {string[]} extraConnect asal tambahan untuk connect-src (mis. server E2E lokal) */
+/** @param {string[]} extraConnect asal tambahan untuk connect-src & img-src (mis. server E2E lokal) */
 function csp(extraConnect = []) {
   return [
     "default-src 'self'",
     "script-src 'self'",
     // Radix UI, sonner, dan jsPDF memakai atribut style inline
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co",
+    // foto absensi dimuat lewat signed URL storage
+    ['img-src', "'self'", 'data:', 'blob:', 'https://*.supabase.co', ...extraConnect].join(' '),
     "font-src 'self' data:",
     ['connect-src', "'self'", 'https://*.supabase.co', 'wss://*.supabase.co', ...extraConnect].join(' '),
     "worker-src 'self'",
@@ -32,7 +33,7 @@ function headers(extraConnect = []) {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()',
     'Cross-Origin-Opener-Policy': 'same-origin',
   }
 }

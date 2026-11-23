@@ -27,6 +27,7 @@ const ReportsPage = page(() => import('@/features/reports/reports-page'), 'Repor
 const ExpensesPage = page(() => import('@/features/expenses/expenses-page'), 'ExpensesPage')
 const StaffPage = page(() => import('@/features/staff/staff-page'), 'StaffPage')
 const OutletsPage = page(() => import('@/features/outlets/outlets-page'), 'OutletsPage')
+const AttendancePage = page(() => import('@/features/attendance/attendance-page'), 'AttendancePage')
 const SettingsPage = page(() => import('@/features/settings/settings-page'), 'SettingsPage')
 
 const perms = (to: string): Permission[] | undefined => NAV_ITEMS.find((i) => i.to === to)?.permissions
@@ -59,6 +60,9 @@ export const routes: RouteObject[] = [
               { path: 'kasir', element: guarded('/kasir', PosPage) },
               { path: 'transaksi', element: <TransactionsPage /> },
               { path: 'pengaturan', element: <SettingsPage /> },
+              { path: 'absensi', element: <AttendancePage /> },
+              // isi QR cetak: /absen?o=<outlet>&t=<token>
+              { path: 'absen', element: <AttendancePage /> },
               { path: 'karyawan', element: guarded('/karyawan', StaffPage) },
               { path: 'outlet', element: guarded('/outlet', OutletsPage) },
               { path: 'laporan', element: guarded('/laporan', ReportsPage) },

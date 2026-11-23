@@ -183,7 +183,9 @@ describe('Pengajuan izin & rekap', () => {
   })
 
   it('rekap: hadir/terlambat, sakit, libur dari owner, tutup, mangkir dihitung otomatis', async () => {
-    // Senin 2–Minggu 8 November 2026; Minggu = toko tutup
+    // Senin 2–Minggu 8 November 2026; Minggu = toko tutup. Absensi berlaku sejak 2 Nov
+    await sql(`update public.outlets set attendance_since = '2026-11-02' where id = $1`, [w.tkl])
+    await sql(`update public.outlet_users set created_at = '2026-10-01' where outlet_id = $1`, [w.tkl])
     await asUser(w.owner, `select public.update_attendance_settings($1, '09:00', 10, '{1,2,3,4,5,6}')`, [w.tkl])
     const sick = await leave(w.kasirTkl, 'sakit', '2026-11-03', '2026-11-03')
     await asUser(w.owner, `select public.review_leave_request($1, true)`, [sick])
@@ -225,6 +227,20 @@ describe('Pengajuan izin & rekap', () => {
     expect(await errorOf(asUser(w.kasirMks, `insert into storage.objects (bucket_id, name) values ('attendance', $1)`, [`${w.tkl}/${w.kasirMks}/x.jpg`]))).toMatch(
       /row-level security/,
     )
+  })
+
+  it('hari sebelum absensi aktif / sebelum karyawan ditugaskan tidak dihitung mangkir', async () => {
+    await sql(`update public.outlets set attendance_since = '2026-11-03' where id = $1`, [w.tkl])
+    await sql(`update public.outlet_users set created_at = '2026-11-04T10:00:00+08' where user_id = $1`, [w.kasirTkl])
+    await sql(`update public.outlet_users set created_at = '2026-10-01' where user_id = $1`, [w.adminTkl])
+    const [{ r }] = await asUser(w.owner, `select public.get_attendance_recap($1, '2026-11-02', '2026-11-05') r`, [w.tkl])
+    const by = (name: string) => r.employees.find((e: any) => e.full_name === name)
+    expect(by('Kasir TKL').days.map((d: any) => d.status)).toEqual(['belum_berlaku', 'belum_berlaku', 'mangkir', 'mangkir'])
+    expect(by('Admin TKL').days.map((d: any) => d.status)).toEqual(['belum_berlaku', 'mangkir', 'mangkir', 'mangkir'])
+    expect(by('Kasir TKL').summary.mangkir).toBe(2)
+    // outlet yang lokasinya belum diatur: semua hari belum berlaku
+    const [{ r: mks }] = await asUser(w.owner, `select public.get_attendance_recap($1, '2026-11-02', '2026-11-03') r`, [w.mks])
+    expect(mks.employees[0].days.map((d: any) => d.status)).toEqual(['belum_berlaku', 'belum_berlaku'])
   })
 
   it('pengguna yang dibuat belakangan tetap muncul di rekap', async () => {

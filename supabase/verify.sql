@@ -25,7 +25,13 @@ with checks(urut, pemeriksaan, lulus, keterangan) as (
       coalesce((select string_agg(full_name, ', ') from public.profiles where is_owner), 'belum ada — jalankan langkah 4')),
   (8, 'Minimal 1 outlet aktif',
       exists (select 1 from public.outlets where is_active),
-      coalesce((select string_agg(code || ' ' || name, ', ') from public.outlets), 'belum ada'))
+      coalesce((select string_agg(code || ' ' || name, ', ') from public.outlets), 'belum ada')),
+  (9, 'Modul absensi terpasang (tabel + RPC)',
+      to_regclass('public.attendance_records') is not null and exists (select 1 from pg_proc where proname = 'attendance_check'), ''),
+  (10, 'Bucket foto absensi PRIVAT',
+      exists (select 1 from storage.buckets where id = 'attendance' and not public), ''),
+  (11, 'Token QR absensi tersembunyi dari karyawan',
+      not has_column_privilege('authenticated', 'public.outlets', 'attendance_token', 'SELECT'), '')
 )
 select case when lulus then '✅' else '❌' end as status, pemeriksaan, keterangan
 from checks order by urut;

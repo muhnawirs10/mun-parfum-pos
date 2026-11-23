@@ -51,9 +51,28 @@ function subOf(req: http.IncomingMessage): string | null {
 
 const PG_STATUS: Record<string, number> = { '42501': 403, P0002: 404, '23505': 409, '28000': 401, '42883': 404, '42P01': 404 }
 
+/** Ambil isi file dari body unggahan storage-js (multipart/form-data atau mentah). */
+function extractFile(buf: Buffer, contentType: string): Buffer {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(contentType)
+  if (!m) return buf
+  const boundary = Buffer.from('--' + (m[1] ?? m[2]))
+  let start = 0
+  while ((start = buf.indexOf(boundary, start)) !== -1) {
+    const headEnd = buf.indexOf('\r\n\r\n', start)
+    if (headEnd === -1) break
+    const head = buf.subarray(start, headEnd).toString()
+    const next = buf.indexOf(boundary, headEnd)
+    if (/filename=|Content-Type: image\//i.test(head)) return buf.subarray(headEnd + 4, next - 2)
+    start = next
+  }
+  return buf
+}
+
 export async function startShim(databaseUrl: string, port: number): Promise<Shim> {
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 8 })
   const state: ShimState = { passwords: new Map(), banned: new Set() }
+  const files = new Map<string, Buffer>()
+  const signed = new Map<string, string>()
   const fnCache = new Map<string, { args: { name: string; type: string }[]; setof: boolean }>()
 
   async function asUser<T>(sub: string | null, fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
@@ -217,15 +236,46 @@ export async function startShim(databaseUrl: string, port: number): Promise<Shim
     const url = new URL(req.url ?? '/', 'http://shim')
     const chunks: Buffer[] = []
     for await (const ch of req) chunks.push(ch as Buffer)
-    const raw = Buffer.concat(chunks).toString()
+    const rawBuf = Buffer.concat(chunks)
+    const sub = subOf(req)
+    const path = url.pathname
+
+    // ── Storage bucket 'attendance' (foto absensi) — RLS storage.objects asli ──
+    const att = /^\/storage\/v1\/object\/(sign\/)?attendance\/(.+)$/.exec(path)
+    if (att) {
+      try {
+        const name = decodeURIComponent(att[2])
+        if (!att[1] && req.method === 'POST') {
+          await asUser(sub, (c) => c.query(`insert into storage.objects (bucket_id, name) values ('attendance', $1)`, [name]))
+          files.set(name, extractFile(rawBuf, String(req.headers['content-type'] ?? '')))
+          return send(res, 200, { Key: `attendance/${name}`, Id: randomUUID() })
+        }
+        if (att[1] && req.method === 'POST') {
+          const { rows } = await asUser(sub, (c) => c.query(`select 1 from storage.objects where bucket_id = 'attendance' and name = $1`, [name]))
+          if (!rows.length) return send(res, 400, { statusCode: '404', error: 'not_found', message: 'Object not found' })
+          const t = randomUUID()
+          signed.set(t, name)
+          return send(res, 200, { signedURL: `/object/sign/attendance/${att[2]}?token=${t}` })
+        }
+        if (att[1] && req.method === 'GET') {
+          const file = signed.get(url.searchParams.get('token') ?? '') === name ? files.get(name) : undefined
+          if (!file) return send(res, 400, { message: 'invalid signature' })
+          res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Access-Control-Allow-Origin': '*' })
+          return res.end(file)
+        }
+      } catch (e) {
+        const err = e as { code?: string; message: string }
+        return send(res, err.code === '42501' ? 403 : 400, { statusCode: '403', error: 'Unauthorized', message: err.message })
+      }
+    }
+
+    const raw = rawBuf.toString()
     let body: unknown = undefined
     try {
       body = raw ? JSON.parse(raw) : undefined
     } catch {
       return send(res, 400, { message: 'JSON tidak valid' })
     }
-    const sub = subOf(req)
-    const path = url.pathname
 
     try {
       // ── Auth ────────────────────────────────────────────────────────

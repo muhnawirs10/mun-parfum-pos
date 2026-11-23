@@ -35,7 +35,7 @@ export function RequireAuth() {
   const location = useLocation()
   if (status === 'unconfigured') return <SetupRequired />
   if (status === 'loading') return <FullScreenLoader />
-  if (status === 'signed_out') return <Navigate to="/masuk" replace state={{ from: location.pathname }} />
+  if (status === 'signed_out') return <Navigate to="/masuk" replace state={{ from: location.pathname + location.search }} />
   if (outlets.length === 0) {
     return (
       <div className="flex min-h-dvh items-center justify-center p-4">

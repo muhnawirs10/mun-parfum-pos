@@ -30,8 +30,8 @@ describe('App shell', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('semua 10 halaman wajib dapat dibuka', async () => {
-    expect(NAV_ITEMS).toHaveLength(10)
+  it('semua halaman (10 wajib + Absensi) dapat dibuka', async () => {
+    expect(NAV_ITEMS).toHaveLength(11)
     for (const item of NAV_ITEMS) {
       const { unmount } = renderRoute(item.to, USERS.owner)
       expect((await screen.findAllByText(item.label)).length).toBeGreaterThan(0)

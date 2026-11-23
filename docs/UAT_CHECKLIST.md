@@ -45,3 +45,15 @@ project Supabase sungguhan dan perangkat fisik. Centang bersama pemilik.
 - [ ] Domain HTTPS & header keamanan aktif (`curl -I https://domain`)
 - [ ] `ALLOWED_ORIGINS` Edge Function diisi domain produksi
 - [ ] CI GitHub Actions hijau pada `main`
+
+## D. Absensi (lihat docs/ABSENSI.md)
+
+- [ ] Migration absensi dijalankan; `verify.sql` 11/11 ✅
+- [ ] Pemilik mengatur titik lokasi toko dari dalam toko (akurasi ≤ 30 m)
+- [ ] QR dicetak & ditempel di toko
+- [ ] Karyawan absen masuk dari HP-nya di dalam toko → berhasil, selfie terlihat di rekap
+- [ ] Coba absen dari luar toko (> 10 m) → ditolak & tercatat di "Percobaan absen yang ditolak"
+- [ ] Login akun yang sama di HP lain → muncul "perlu persetujuan pemilik"
+- [ ] Ajukan izin sakit → pemilik setujui → rekap menampilkan "Sakit"
+- [ ] Export rekap Excel/PDF
+

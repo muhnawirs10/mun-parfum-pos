@@ -102,6 +102,7 @@ npm run typecheck && npm run lint && npm run build
 - [Setup Supabase lewat CLI](docs/SUPABASE_SETUP.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Instalasi PWA](docs/PWA_INSTALL.md)
+- [Absensi karyawan (QR + GPS + selfie)](docs/ABSENSI.md)
 - [Keamanan & hasil audit](docs/SECURITY.md)
 - [Checklist UAT sebelum produksi](docs/UAT_CHECKLIST.md)
 - Edge Function: `supabase/functions/admin-users`

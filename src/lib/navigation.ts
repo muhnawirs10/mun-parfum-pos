@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  CalendarCheck,
   Home,
   Package,
   Receipt,
@@ -23,13 +24,14 @@ export interface NavItem {
   permissions?: Permission[]
 }
 
-/** Sepuluh halaman wajib (spesifikasi bagian 10). */
+/** Sepuluh halaman wajib (spesifikasi bagian 10) + Absensi. */
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Beranda', description: 'Ringkasan penjualan hari ini', icon: Home, group: 'utama' },
   { to: '/produk', label: 'Produk', description: 'Kelola produk, harga, dan HPP', icon: Package, group: 'utama', permissions: ['products.manage'] },
   { to: '/kasir', label: 'Kasir', description: 'Buat transaksi penjualan', icon: ShoppingCart, group: 'utama', permissions: ['pos.sell'] },
   { to: '/laporan', label: 'Laporan', description: 'Omzet, laba, dan closing harian', icon: BarChart3, group: 'utama', permissions: ['reports.view', 'closing.perform'] },
   { to: '/transaksi', label: 'Riwayat Transaksi', description: 'Daftar transaksi dan cetak ulang struk', icon: Receipt, group: 'operasional' },
+  { to: '/absensi', label: 'Absensi', description: 'Absen masuk/pulang, izin, dan rekap kehadiran', icon: CalendarCheck, group: 'operasional' },
   { to: '/pengeluaran', label: 'Pengeluaran', description: 'Catat biaya operasional', icon: Wallet, group: 'operasional', permissions: ['expenses.view', 'expenses.manage'] },
   { to: '/stok', label: 'Stok', description: 'Stok masuk, keluar, dan riwayat pergerakan', icon: Boxes, group: 'operasional', permissions: ['stock.manage'] },
   { to: '/karyawan', label: 'Karyawan', description: 'Pengguna, peran, dan hak akses', icon: Users, group: 'manajemen', permissions: ['users.manage'] },

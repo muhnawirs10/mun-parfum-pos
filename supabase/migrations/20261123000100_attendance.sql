@@ -38,6 +38,9 @@ alter table public.outlets
   add column attendance_max_accuracy_m integer not null default 30 check (attendance_max_accuracy_m between 5 and 200),
   add column attendance_token text not null
     default replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''),
+  -- tanggal absensi mulai berlaku (diisi saat lokasi toko pertama kali diatur);
+  -- hari sebelumnya tidak dihitung mangkir
+  add column attendance_since date,
   add column work_start_time time not null default '09:00',
   add column late_tolerance_minutes integer not null default 10 check (late_tolerance_minutes between 0 and 180),
   add column work_days smallint[] not null default '{1,2,3,4,5,6,7}'
@@ -47,7 +50,7 @@ alter table public.outlets
 -- Token QR TIDAK boleh terbaca karyawan (kalau terbaca, QR bisa dibuat sendiri).
 revoke select on public.outlets from authenticated;
 grant select (id, code, name, address, phone, logo_url, is_active, created_at, updated_at,
-              latitude, longitude, attendance_radius_m, attendance_max_accuracy_m,
+              latitude, longitude, attendance_radius_m, attendance_max_accuracy_m, attendance_since,
               work_start_time, late_tolerance_minutes, work_days)
   on public.outlets to authenticated;
 -- pengaturan absensi hanya lewat RPC (dengan validasi akurasi & audit)
@@ -435,7 +438,8 @@ begin
     'token', v_o.attendance_token,
     'work_start_time', to_char(v_o.work_start_time, 'HH24:MI'),
     'late_tolerance_minutes', v_o.late_tolerance_minutes,
-    'work_days', to_jsonb(v_o.work_days));
+    'work_days', to_jsonb(v_o.work_days),
+    'attendance_since', v_o.attendance_since);
 end $$;
 
 create function public.set_attendance_location(p_outlet_id uuid, p_lat double precision, p_lng double precision, p_accuracy double precision)
@@ -450,7 +454,9 @@ begin
     raise exception 'GPS kurang akurat (±% m). Ambil titik lokasi di dalam toko saat akurasi ≤ 30 m.', round(coalesce(p_accuracy, 0)::numeric)
       using errcode = '22023';
   end if;
-  update public.outlets set latitude = p_lat, longitude = p_lng where id = p_outlet_id;
+  update public.outlets set latitude = p_lat, longitude = p_lng,
+    attendance_since = coalesce(attendance_since, private.business_date())
+  where id = p_outlet_id;
   perform private.log_audit(p_outlet_id, 'set_location', 'attendance', p_outlet_id,
     jsonb_build_object('lat', p_lat, 'lng', p_lng, 'accuracy_m', p_accuracy));
 end $$;
@@ -640,6 +646,7 @@ end $$;
 -- REKAP
 -- status per hari: hadir | terlambat | sakit | izin | cuti | libur | tutup
 --                  | mangkir | belum_absen (hari ini) | akan_datang
+--                  | belum_berlaku (sebelum absensi aktif / sebelum ditugaskan)
 -- ---------------------------------------------------------------------
 create function public.get_attendance_recap(p_outlet_id uuid, p_from date, p_to date, p_user_id uuid default null)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
@@ -661,7 +668,11 @@ begin
 
   return (
     with users as (
-      select p.id, p.full_name, p.username from public.profiles p
+      select p.id, p.full_name, p.username,
+        greatest(v_o.attendance_since,
+                 (select min(private.business_date(ou.created_at)) from public.outlet_users ou
+                  where ou.user_id = p.id and ou.outlet_id = p_outlet_id)) as since
+      from public.profiles p
       where (p_user_id is null or p.id = p_user_id)
         and (exists (select 1 from public.outlet_users ou where ou.user_id = p.id and ou.outlet_id = p_outlet_id and ou.is_active)
              or exists (select 1 from public.attendance_records r where r.user_id = p.id and r.outlet_id = p_outlet_id
@@ -676,6 +687,7 @@ begin
           when r.id is not null then case when r.late_minutes > 0 then 'terlambat' else 'hadir' end
           when l.leave_type is not null then l.leave_type::text
           when d.day > v_today then 'akan_datang'
+          when v_o.attendance_since is null or d.day < u.since then 'belum_berlaku'
           when not (extract(isodow from d.day)::smallint = any (v_o.work_days)) then 'tutup'
           when d.day = v_today then 'belum_absen'
           else 'mangkir'
